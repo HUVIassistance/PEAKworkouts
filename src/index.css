@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --brand-primary: #111a2e;
+    --brand-primary-dark: #0b1120;
+    --brand-primary-card: #16223b;
+    --brand-primary-border: #233556;
+    --brand-accent: #f47b20;
+    --brand-accent-hover: #e06810;
+    --brand-accent-glow: rgba(244, 123, 32, 0.25);
+  }
+
+  body {
+    background-color: #0c1220;
+    color: #f1f5f9;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+.font-mono-numbers {
+  font-family: 'JetBrains Mono', monospace, ui-monospace;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Custom subtle scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+::-webkit-scrollbar-thumb {
+  background: #243556;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #f47b20;
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(244, 123, 32, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(244, 123, 32, 0.7);
+  }
+}
+
+.pulse-accent {
+  animation: pulseGlow 2s infinite ease-in-out;
+}

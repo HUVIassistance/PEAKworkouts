@@ -1,0 +1,6 @@
+{
+  "name": "TitanPulse - Suivi de Workout & Chronomètre",
+  "description": "Application athlétique pour suivre vos entraînements, chronométrer vos temps de repos, enregistrer vos performances quotidiennes et générer des séances personnalisées avec l'agent IA.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
