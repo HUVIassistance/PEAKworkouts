@@ -40,7 +40,7 @@ function geminiWorkoutApiPlugin(): Plugin {
 export default defineConfig(() => {
   return {
     // Ajout de la base pour GitHub Pages (nom exact de votre dépôt)
-    base: '/HUVlassistance/',
+    base: '/huviassistance/',
     plugins: [react(), tailwindcss(), geminiWorkoutApiPlugin()],
     resolve: {
       alias: {
