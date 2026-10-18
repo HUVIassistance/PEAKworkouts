@@ -285,6 +285,30 @@ async function buildProgram(env) {
 
 // ---------------------------------------------------------------- /session
 
+/** Programme actif qui contient ce workout — évite de dépendre d'un ID mémorisé côté app. */
+async function resolveProgramForWorkout(env, workoutId, fallback) {
+  if (!workoutId) return fallback || null;
+  try {
+    const q = await notion(env, '/v1/databases/' + DB_PROGRAMMES + '/query', {
+      page_size: 50,
+      filter: { property: 'Actif ?', checkbox: { equals: true } },
+    });
+    const hits = (q.results || []).filter((r) =>
+      ((r.properties['Workouts liés'] || {}).relation || []).some((rel) => rel.id === workoutId)
+    );
+    if (!hits.length) return fallback || null;
+    hits.sort((a, b) => {
+      const da = (a.properties.Date && a.properties.Date.date && a.properties.Date.date.start) || '';
+      const db = (b.properties.Date && b.properties.Date.date && b.properties.Date.date.start) || '';
+      if (da !== db) return db.localeCompare(da);
+      return (b.created_time || '').localeCompare(a.created_time || '');
+    });
+    return hits[0].id;
+  } catch (e) {
+    return fallback || null;
+  }
+}
+
 async function pushSession(env, body) {
   const sessionId = String(body.sessionId || '').trim();
   if (!sessionId) throw new Error('sessionId requis');
@@ -310,7 +334,10 @@ async function pushSession(env, body) {
   if (body.volumeKg != null) props['Volume (kg)'] = { number: Math.round(body.volumeKg) };
   if (body.notes) props.Notes = { rich_text: [{ text: { content: String(body.notes).slice(0, 1900) } }] };
   if (body.feeling) props.Feeling = { select: { name: body.feeling } };
+  // Rattachements : la séance pointe le workout fait ET le programme dont il vient.
   if (body.workoutNotionId) props['Workout lié'] = { relation: [{ id: body.workoutNotionId }] };
+  const programId = await resolveProgramForWorkout(env, body.workoutNotionId, body.programNotionId);
+  if (programId) props['Programme lié'] = { relation: [{ id: programId }] };
 
   const children = [{ object: 'block', type: 'heading_2', heading_2: { rich_text: [{ text: { content: 'Exercices réalisés' } }] } }];
   for (const ex of body.exercises || []) {

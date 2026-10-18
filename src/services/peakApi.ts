@@ -327,6 +327,11 @@ export async function pushSessionToNotion(log: WorkoutSessionLog): Promise<PushR
       setsPlanned: setsTotal,
       volumeKg: Math.round(log.totalVolumeKg || 0),
       notes: log.notes,
+      // Rattachements Notion : le workout fait (page « Mes workouts ») et le programme.
+      workoutNotionId: (log.routineId || '').startsWith('notion-')
+        ? log.routineId!.replace(/^notion-/, '')
+        : undefined,
+      programNotionId: getSettings().notionProgramId || undefined,
       exercises: performed,
     };
     const res = await fetch(API_BASE + '/session', {
