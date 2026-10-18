@@ -378,6 +378,11 @@ function writePending(list: SessionPayload[]): void {
  *  est mise en file et renvoyée plus tard. */
 export async function pushSessionToNotion(log: WorkoutSessionLog): Promise<PushResult> {
   const payload = buildSessionPayload(log);
+  // Aucune série validée = clôture accidentelle : on n'encombre pas le journal Notion.
+  // La séance reste dans l'historique local de toute façon.
+  if (!payload.exercises.length) {
+    return { ok: true, error: 'aucune série validée — non transmis' };
+  }
   const res = await sendSession(payload);
   if (!res.ok) {
     const pending = readPending().filter((p) => p.sessionId !== payload.sessionId);
