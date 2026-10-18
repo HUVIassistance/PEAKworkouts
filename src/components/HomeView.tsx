@@ -29,6 +29,7 @@ import {
   getBougerCompletedDates,
   toggleBougerCompletedDate,
   resetWorkoutHistoryToDefaults,
+  getSettings,
 } from '../utils/storage.ts';
 
 interface HomeViewProps {
@@ -216,7 +217,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <span className="text-xs text-slate-400 font-medium">{activeProgram.name}</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              Bonjour, Athlète !
+              Bonjour, {getSettings().firstName} !
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 max-w-xl">
               Rythme 3x par semaine : 1 jour Musculation alterné avec 1 jour « Bouger », 7e jour Repos.

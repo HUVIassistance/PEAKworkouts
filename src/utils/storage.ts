@@ -24,12 +24,15 @@ export interface AppSettings {
   soundEnabled: boolean;
   autoStartRestTimer: boolean;
   vibrationEnabled: boolean;
+  /** Prénom affiché dans l'accueil (« Bonjour, Hugo ! »). */
+  firstName: string;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
   soundEnabled: true,
   autoStartRestTimer: true,
   vibrationEnabled: true,
+  firstName: 'Hugo',
 };
 
 export function getSettings(): AppSettings {
