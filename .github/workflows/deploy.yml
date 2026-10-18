@@ -26,4 +26,7 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
+          # force_orphan réécrit la branche gh-pages à chaque déploiement :
+          # sans ce cname, le fichier CNAME peut disparaître et le domaine custom sauter.
+          cname: train.huvioptimisation.com
           force_orphan: true
