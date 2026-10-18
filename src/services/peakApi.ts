@@ -195,6 +195,7 @@ export async function syncProgram(): Promise<SyncSummary> {
         sets: ex.sets || 3,
         reps: ex.reps || 10,
         weight: ex.weightKg ?? 0,
+        weights: ex.weights && ex.weights.length ? ex.weights : undefined,
         restSeconds: 90,
         supersetGroup: ex.superset || undefined,
         notes: ex.repsMax ? 'cible ' + ex.reps + '-' + ex.repsMax + ' reps' : undefined,
@@ -263,21 +264,28 @@ export interface PushResult {
  *  Fire-and-forget : ne doit JAMAIS faire échouer l'enregistrement local. */
 export async function pushSessionToNotion(log: WorkoutSessionLog): Promise<PushResult> {
   try {
-    const setsPlanned = log.exercises.reduce((acc, ex) => acc + (ex.sets?.length || 0), 0);
+    const setsTotal = log.exercises.reduce((acc, ex) => acc + (ex.sets?.length || 0), 0);
+    // On n'envoie QUE ce qui a réellement été validé : le prévu vit dans le programme,
+    // pas dans le journal de séance. Le nombre de séries est libre en séance.
+    const performed = (log.exercises || [])
+      .map((ex) => ({
+        name: ex.exerciseName,
+        sets: (ex.sets || [])
+          .filter((s) => s.completed)
+          .map((s) => ({ weight: s.weight, reps: s.reps })),
+      }))
+      .filter((ex) => ex.sets.length > 0);
+
     const payload = {
       sessionId: log.id,
       title: log.routineName + ' — ' + log.dateString,
       date: log.dateString,
       durationMin: Math.round((log.durationSeconds || 0) / 60),
       setsDone: log.totalSetsCompleted,
-      setsPlanned,
+      setsPlanned: setsTotal,
       volumeKg: Math.round(log.totalVolumeKg || 0),
       notes: log.notes,
-      exerciseList: undefined,
-      exercises: (log.exercises || []).map((ex) => ({
-        name: ex.exerciseName,
-        sets: (ex.sets || []).map((s) => ({ weight: s.weight, reps: s.reps })),
-      })),
+      exercises: performed,
     };
     const res = await fetch(API_BASE + '/session', {
       method: 'POST',

@@ -73,6 +73,8 @@ export interface RoutineExerciseItem {
   sets: number;
   reps: number;
   weight: number;
+  /** Charges prescrites série par série (ex. [10, 10, 12] depuis « @ 10/10/12 kg »). */
+  weights?: number[];
   restSeconds: number;
   supersetGroup?: string;
   executionMode?: ExerciseExecutionMode;

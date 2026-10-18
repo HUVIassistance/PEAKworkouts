@@ -324,6 +324,39 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
     onUpdateExercises(updated);
   };
 
+  /** Ajoute une série à l'exercice courant (le nombre prescrit n'est qu'un départ). */
+  const handleAddSet = () => {
+    const idx = currentStep.exerciseIndex;
+    const updated = [...exercises];
+    const ex = { ...updated[idx] };
+    const last = ex.sets[ex.sets.length - 1];
+    ex.sets = [
+      ...ex.sets,
+      {
+        id: `set-extra-${idx}-${Date.now()}`,
+        setNumber: ex.sets.length + 1,
+        targetReps: last?.targetReps ?? 10,
+        weight: last?.weight ?? 0,
+        reps: last?.reps ?? last?.targetReps ?? 10,
+        completed: false,
+      },
+    ];
+    updated[idx] = ex;
+    onUpdateExercises(updated);
+  };
+
+  /** Retire la dernière série, seulement si elle n'a pas été validée. */
+  const handleRemoveLastSet = () => {
+    const idx = currentStep.exerciseIndex;
+    const updated = [...exercises];
+    const ex = { ...updated[idx] };
+    if (ex.sets.length <= 1) return;
+    if (ex.sets[ex.sets.length - 1].completed) return;
+    ex.sets = ex.sets.slice(0, -1);
+    updated[idx] = ex;
+    onUpdateExercises(updated);
+  };
+
   const handleManualRepsChange = (val: number) => {
     const updated = [...exercises];
     updated[currentStep.exerciseIndex].sets[currentStep.setIndex].reps = Math.max(1, val);
@@ -632,6 +665,27 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
                   </div>
                 );
               })}
+
+              {/* Le nombre de séries prescrit par Notion n'est qu'un point de départ :
+                  tu peux en ajouter (ou retirer la dernière, si non validée) en séance. */}
+              <button
+                type="button"
+                onClick={handleAddSet}
+                title="Ajouter une série à cet exercice"
+                className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-[#16223b] hover:bg-[#233556] text-[#f47b20] border border-[#233556] hover:border-[#f47b20] transition"
+              >
+                + Série
+              </button>
+              {currentExercise.sets.length > 1 && !currentExercise.sets[currentExercise.sets.length - 1].completed && (
+                <button
+                  type="button"
+                  onClick={handleRemoveLastSet}
+                  title="Retirer la dernière série"
+                  className="px-2 py-1.5 rounded-xl text-xs font-bold bg-[#16223b] hover:bg-[#233556] text-slate-400 border border-[#233556] transition"
+                >
+                  −
+                </button>
+              )}
             </div>
 
             {/* Current Set Focused Input Card */}

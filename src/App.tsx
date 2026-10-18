@@ -171,7 +171,8 @@ export default function App() {
         id: `set-${idx}-${sIdx}-${Date.now()}`,
         setNumber: sIdx + 1,
         targetReps: item.reps,
-        weight: initialWeight,
+        // Charge prescrite pour CETTE série si Notion en donne une par série
+        weight: item.weights?.[sIdx] ?? initialWeight,
         reps: item.reps,
         completed: false,
       }));
