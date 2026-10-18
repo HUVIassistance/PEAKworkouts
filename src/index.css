@@ -54,3 +54,37 @@
 .pulse-accent {
   animation: pulseGlow 2s infinite ease-in-out;
 }
+
+/* ------------------------------------------------------------------ mobile
+   L'app est utilisée principalement sur téléphone (PWA installée). Les tailles
+   Tailwind (text-xs, p-4…) sont en rem : relever la racine agrandit TOUT
+   proportionnellement (texte, marges, icônes) sans toucher aux composants.
+   Les tailles écrites en dur en px (text-[11px], text-[9px]) sont reprises
+   explicitement plus bas, sinon elles resteraient minuscules. */
+@media (max-width: 640px) {
+  html {
+    font-size: 18px; /* 16 -> 18 : tout le rem (marges, icônes, gouttières) suit */
+  }
+
+  /* Échelle de lecture mobile : les utilitaires Tailwind sont recalibrés
+     pour viser ≥ 14 px de texte courant (12 px avant = besoin de zoomer). */
+  .text-xs { font-size: 0.8rem; line-height: 1.4; }   /* 14,4 px */
+  .text-sm { font-size: 0.92rem; line-height: 1.45; } /* 16,6 px */
+  .text-base { font-size: 1rem; }                     /* 18 px */
+
+  .text-\[9px\] { font-size: 11px !important; }
+  .text-\[10px\] { font-size: 12px !important; }
+  .text-\[11px\] { font-size: 12.5px !important; }
+
+  /* Zones tactiles : 44 px minimum, la cible Apple/Google */
+  button,
+  [role='button'],
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Le header ne doit jamais forcer un défilement horizontal */
+  header {
+    overflow-x: clip;
+  }
+}

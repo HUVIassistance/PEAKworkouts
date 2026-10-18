@@ -76,9 +76,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
   const formattedDate = `${dayNames[now.getDay()]} ${now.getDate()} ${monthNames[now.getMonth()]} ${now.getFullYear()}`;
 
-  // Workouts belonging to active program
-  const seanceA = routines.find((r) => r.id === 'seance-a-push-pull-core') || routines[0];
-  const seanceB = routines.find((r) => r.id === 'seance-b-epaules-pecs-renfo') || routines[1] || routines[0];
+  // Workouts belonging to active program (IDs Notion ou par défaut)
+  const programRoutines = routines.filter((r) => r.programId === activeProgram.id);
+  const seanceA = programRoutines[0] || routines.find((r) => r.id === 'seance-a-push-pull-core') || routines[0];
+  const seanceB = programRoutines[1] || routines.find((r) => r.id === 'seance-b-epaules-pecs-renfo') || routines[1] || routines[0];
 
   // Specific planned athlete schedule aligned on user's exact cycle:
   // 14 oct: Séance B (Mercredi)
@@ -209,12 +210,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
       <div className="bg-gradient-to-r from-[#111a2e] to-[#16233d] border border-[#233556] rounded-3xl p-5 shadow-lg relative overflow-hidden">
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-[#f47b20] font-mono">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-[#f47b20] font-mono whitespace-nowrap">
                 {formattedDate}
               </span>
               <span className="text-slate-500">•</span>
-              <span className="text-xs text-slate-400 font-medium">{activeProgram.name}</span>
+              <span className="text-xs text-slate-400 font-medium min-w-0">{activeProgram.name}</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
               Bonjour, {getSettings().firstName} !
@@ -438,10 +439,10 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#f47b20] text-white">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#f47b20] text-white whitespace-nowrap">
                       Séance du jour
                     </span>
-                    <span className="text-xs text-slate-400 font-mono">
+                    <span className="text-xs text-slate-400 font-mono truncate min-w-0">
                       {activeProgram.name}
                     </span>
                   </div>

@@ -431,9 +431,9 @@ export default function App() {
                   <BrandMark size={19} />
                 </div>
                 <div>
-                  <h1 className="text-base sm:text-lg font-black text-white tracking-tight flex items-baseline gap-1.5">
+                  <h1 className="text-base sm:text-lg font-black text-white tracking-tight flex items-baseline gap-1.5 whitespace-nowrap">
                     <span>PEAK form</span>
-                    <span className="text-[11px] font-medium text-[#f47b20] uppercase tracking-wider">
+                    <span className="hidden sm:inline text-[11px] font-medium text-[#f47b20] uppercase tracking-wider">
                       Workouts
                     </span>
                   </h1>
@@ -462,7 +462,7 @@ export default function App() {
                   onClick={handleSyncNotion}
                   disabled={syncState === 'busy'}
                   title="Importer le programme actif depuis Notion"
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#16223b] hover:bg-[#233556] border text-xs font-semibold transition disabled:opacity-60 ${
+                  className={`flex items-center justify-center gap-1.5 p-2.5 sm:px-3 sm:py-1.5 rounded-xl bg-[#16223b] hover:bg-[#233556] border text-xs font-semibold transition disabled:opacity-60 ${
                     syncState === 'err'
                       ? 'border-rose-500/60 text-rose-300'
                       : syncState === 'ok'
@@ -470,16 +470,16 @@ export default function App() {
                       : 'border-[#233556] text-slate-200 hover:text-white hover:border-[#f47b20]'
                   }`}
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${syncState === 'busy' ? 'animate-spin text-[#f47b20]' : 'text-slate-400'}`} />
-                  <span>{syncState === 'busy' ? 'Sync…' : 'Synchroniser'}</span>
+                  <RefreshCw className={`w-4 h-4 sm:w-3.5 sm:h-3.5 ${syncState === 'busy' ? 'animate-spin text-[#f47b20]' : 'text-slate-400'}`} />
+                  <span className="hidden sm:inline">{syncState === 'busy' ? 'Sync…' : 'Synchroniser'}</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setIsAiModalOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#16223b] hover:bg-[#233556] border border-[#233556] hover:border-[#f47b20] text-slate-200 hover:text-white text-xs font-semibold transition"
+                  className="flex items-center justify-center gap-1.5 p-2.5 sm:px-3 sm:py-1.5 rounded-xl bg-[#16223b] hover:bg-[#233556] border border-[#233556] hover:border-[#f47b20] text-slate-200 hover:text-white text-xs font-semibold transition"
                 >
-                  <Sparkles className="w-3.5 h-3.5 text-[#f47b20]" />
-                  <span>Agent IA</span>
+                  <Sparkles className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-[#f47b20]" />
+                  <span className="hidden sm:inline">Agent IA</span>
                 </button>
               </div>
             </div>
