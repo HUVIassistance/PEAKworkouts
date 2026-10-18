@@ -40,7 +40,6 @@ interface HomeViewProps {
   personalRecords: Record<string, PersonalRecord>;
   onStartRoutine: (routine: WorkoutRoutine) => void;
   onNavigateTab: (tab: 'workouts' | 'nutrition' | 'progression' | 'history' | 'exercises') => void;
-  onOpenAiGenerator: () => void;
   onRefreshHistory?: () => void;
 }
 
@@ -52,7 +51,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
   personalRecords,
   onStartRoutine,
   onNavigateTab,
-  onOpenAiGenerator,
   onRefreshHistory,
 }) => {
   const [bougerDates, setBougerDates] = useState<string[]>([]);
@@ -233,17 +231,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 return 'Rythme 3x par semaine : 1 jour Musculation alterné avec 1 jour « Bouger », 7e jour Repos.';
               })()}
             </p>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={onOpenAiGenerator}
-              className="px-3.5 py-2 rounded-2xl bg-[#16223b] hover:bg-[#233556] border border-[#233556] hover:border-[#f47b20] text-xs font-bold text-white transition flex items-center gap-1.5 shadow-sm"
-            >
-              <Sparkles className="w-4 h-4 text-[#f47b20]" />
-              <span>Générer une séance IA</span>
-            </button>
           </div>
         </div>
       </div>

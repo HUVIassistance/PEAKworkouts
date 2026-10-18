@@ -32,7 +32,6 @@ interface RoutinesViewProps {
   onDeleteRoutine: (routineId: string) => void;
   onCreateProgram: (program: TrainingProgram) => void;
   onDeleteProgram: (programId: string) => void;
-  onOpenAiGenerator: () => void;
 }
 
 export const RoutinesView: React.FC<RoutinesViewProps> = ({
@@ -46,7 +45,6 @@ export const RoutinesView: React.FC<RoutinesViewProps> = ({
   onDeleteRoutine,
   onCreateProgram,
   onDeleteProgram,
-  onOpenAiGenerator,
 }) => {
   const [viewMode, setViewMode] = useState<'active_program' | 'all_programs'>('active_program');
   const [expandedWorkoutId, setExpandedWorkoutId] = useState<string | null>(null);
@@ -385,15 +383,6 @@ export const RoutinesView: React.FC<RoutinesViewProps> = ({
 
         {/* Action buttons */}
         <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
-          <button
-            type="button"
-            onClick={onOpenAiGenerator}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#16223b] hover:bg-[#233556] border border-[#233556] hover:border-[#f47b20] text-slate-200 hover:text-white text-xs font-semibold transition"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-[#f47b20]" />
-            <span>Agent IA</span>
-          </button>
-
           <button
             type="button"
             onClick={() => {

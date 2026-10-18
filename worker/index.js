@@ -19,7 +19,8 @@ const DB_WORKOUTS = '1113d4e3-6c03-49b5-8c48-b3e743c76841';
 const DB_SESSIONS = 'ba7adb2f-de0f-4545-b933-07262983b1f8';
 
 const ALLOWED_ORIGINS = ['https://train.huvioptimisation.com', 'https://huviassistance.github.io'];
-const LB_TO_KG = 0.45359237;
+// Les charges Notion sont en KILOGRAMMES (validé par Hugo le 2026-10-18).
+// Aucune conversion n'est appliquée — ne pas réintroduire de lbs→kg.
 
 const json = (body, status, origin) =>
   new Response(JSON.stringify(body, null, 2), {
@@ -105,7 +106,9 @@ async function blockLines(env, blockId, depth) {
 
 const SECTION_RE = /^s[ée]ance\s+([a-z0-9]+)\s*[:：]?/i;
 const SUPERSET_RE = /^superset\s*(\d+)/i;
-const EXO_RE = /^(.+?)\s+(\d+)\s*[x×]\s*(\d+)(?:\s*[-–]\s*(\d+))?\s*$/i;
+// « Push-ups 3x12-15 » ou « RDL 3x15 @ 10 » ou « RDL 3x15 @ 10/10/12 kg »
+const EXO_RE =
+  /^(.+?)\s+(\d+)\s*[x×]\s*(\d+)(?:\s*[-–]\s*(\d+))?(?:\s*@\s*([0-9]+(?:[.,][0-9]+)?(?:\s*\/\s*[0-9]+(?:[.,][0-9]+)?)*)\s*(?:kgs?|lbs?)?)?\s*$/i;
 
 /** Découpe le contenu de page en sections « Séance X » puis en exercices ordonnés. */
 function parseSections(lines) {
@@ -138,6 +141,12 @@ function parseSections(lines) {
     const ex = t.match(EXO_RE);
     if (ex && current) {
       order += 1;
+      const loads = ex[5]
+        ? ex[5]
+            .split('/')
+            .map((s) => parseFloat(s.replace(',', '.')))
+            .filter((n) => !isNaN(n))
+        : [];
       current.exercises.push({
         name: ex[1].trim().replace(/[-–,:;]+$/, ''),
         sets: parseInt(ex[2], 10),
@@ -145,26 +154,36 @@ function parseSections(lines) {
         repsMax: ex[4] ? parseInt(ex[4], 10) : null,
         superset: superset,
         order: order,
-        weightKg: null,
+        weights: loads, // charges écrites dans le contenu, en kg
+        weightKg: loads.length ? loads[0] : null,
       });
     }
   }
   return sections;
 }
 
-/** Charges déclarées dans la base « Exercices » liée au workout (Lbs → kg). */
+/** Charges déclarées dans la base « Exercices » liée au workout.
+ *  Les colonnes s'appellent encore « Série N (Lbs) » mais les valeurs sont en KG. */
 async function weightMap(env, workoutPage) {
   const rel = (workoutPage.properties.Exercices && workoutPage.properties.Exercices.relation) || [];
   const map = new Map();
+  const readKg = (p, i) => {
+    for (const key of ['Série ' + i + ' (kg)', 'Série ' + i + ' (Lbs)']) {
+      const prop = p[key];
+      const v = num(prop && prop.number);
+      if (v != null && v > 0) return v;
+    }
+    return null;
+  };
   for (const r of rel) {
     const page = await notion(env, '/v1/pages/' + r.id);
     const p = page.properties;
     const name = rt(p.Exercice && p.Exercice.title);
-    const lbs = num(p['Série 1 (Lbs)'] && p['Série 1 (Lbs)'].number);
     if (!name) continue;
-    const weightKg = lbs != null && lbs > 0 ? Math.round(lbs * LB_TO_KG * 2) / 2 : null;
+    const sets = [1, 2, 3].map((i) => readKg(p, i)).filter((v) => v != null);
+    const kg = sets.length ? sets[0] : null;
     for (const a of aliases(name)) {
-      if (!map.has(a) || (map.get(a) == null && weightKg != null)) map.set(a, weightKg);
+      if (!map.has(a) || (map.get(a) == null && kg != null)) map.set(a, kg);
     }
   }
   return map;
@@ -228,8 +247,16 @@ async function buildProgram(env) {
 
     const wmap = await weightMap(env, page);
     const exercises = section.exercises.map((e) => {
-      const kg = lookupWeight(wmap, e.name);
-      return { ...e, weightKg: kg, hasWeight: kg != null };
+      const dbKg = lookupWeight(wmap, e.name);
+      const fromContent = e.weights && e.weights.length ? e.weights : [];
+      const weights = fromContent.length ? fromContent : dbKg != null ? [dbKg] : [];
+      return {
+        ...e,
+        weights,
+        weightKg: weights.length ? weights[0] : null,
+        hasWeight: weights.length > 0,
+        weightSource: fromContent.length ? 'contenu' : dbKg != null ? 'base Exercices' : null,
+      };
     });
 
     workouts.push({
@@ -251,7 +278,7 @@ async function buildProgram(env) {
     meta: {
       generatedAt: new Date().toISOString(),
       activeCount: actifs.length,
-      note: 'Exercices et ordre = contenu de la page du workout. Charges = base Exercices (Lbs → kg).',
+      note: 'Exercices et ordre = contenu de la page du workout. Charges en kg (contenu « @ 10 » ou base Exercices).',
     },
   };
 }
