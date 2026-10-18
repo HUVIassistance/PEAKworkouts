@@ -84,6 +84,47 @@ function aliases(title) {
   return [...out].filter((a) => a.length > 1);
 }
 
+/** Singulier grossier (enlève un « s » final sur les mots assez longs) et
+ *  suppression des jetons d'une lettre (artefacts de « (RDL's) » -> « s »). */
+const singular = (s) =>
+  norm(s)
+    .split(' ')
+    .filter((w) => w.length > 1)
+    .map((w) => (w.length > 3 && w.endsWith('s') ? w.slice(0, -1) : w))
+    .join(' ');
+
+// Mots trop génériques pour identifier un exercice à eux seuls
+const GENERIC_WORDS = ['row', 'press', 'curl', 'dip', 'squat', 'raise', 'extension', 'pull'];
+
+/** Deux noms désignent-ils le même exercice ? (alias, pluriel, inclusion, sigle) */
+function sameExercise(a, b) {
+  const na = singular(a);
+  const nb = singular(b);
+  if (na === nb) return true;
+
+  const A = new Set(aliases(a).map(singular));
+  const B = new Set(aliases(b).map(singular));
+  for (const x of A) if (B.has(x)) return true;
+
+  if (na.length > 3 && nb.length > 3 && (na.indexOf(nb) >= 0 || nb.indexOf(na) >= 0)) return true;
+
+  // Sigle / sous-ensemble de mots : « rdl » ⊂ « romanian deadlift rdl »
+  const ta = new Set(na.split(' '));
+  const tb = new Set(nb.split(' '));
+  const [small, big] = ta.size <= tb.size ? [ta, tb] : [tb, ta];
+  if (small.size && small.size <= 3 && big.size <= 6) {
+    let all = true;
+    for (const t of small) {
+      if (t.length < 3 || GENERIC_WORDS.indexOf(t) >= 0 || !big.has(t)) {
+        all = false;
+        break;
+      }
+    }
+    if (all) return true;
+  }
+  return false;
+}
+
 async function blockLines(env, blockId, depth) {
   const d = depth || 0;
   if (d > 2) return [];
@@ -162,32 +203,32 @@ function parseSections(lines) {
   return sections;
 }
 
-/** Charges déclarées dans la base « Exercices » liée au workout.
- *  Les colonnes s'appellent encore « Série N (Lbs) » mais les valeurs sont en KG. */
-async function weightMap(env, workoutPage) {
+/** Exercices liés au workout dans la base : nom + charge éventuelle.
+ *  Sert à la fois de table de correspondance et de filet de sécurité (complétude). */
+async function relationExercises(env, workoutPage) {
   const rel = (workoutPage.properties.Exercices && workoutPage.properties.Exercices.relation) || [];
-  const map = new Map();
-  const readKg = (p, i) => {
-    for (const key of ['Série ' + i + ' (kg)', 'Série ' + i + ' (Lbs)']) {
-      const prop = p[key];
-      const v = num(prop && prop.number);
-      if (v != null && v > 0) return v;
-    }
-    return null;
-  };
+  const out = [];
   for (const r of rel) {
     const page = await notion(env, '/v1/pages/' + r.id);
     const p = page.properties;
     const name = rt(p.Exercice && p.Exercice.title);
     if (!name) continue;
-    const sets = [1, 2, 3].map((i) => readKg(p, i)).filter((v) => v != null);
-    const kg = sets.length ? sets[0] : null;
-    for (const a of aliases(name)) {
-      if (!map.has(a) || (map.get(a) == null && kg != null)) map.set(a, kg);
+    // Colonnes legacy « Série N » supprimées : plus de charge dans la base.
+    out.push({ name, weightKg: null });
+  }
+  return out;
+}
+
+function weightMapFrom(list) {
+  const map = new Map();
+  for (const e of list) {
+    for (const a of aliases(e.name)) {
+      if (!map.has(a) || (map.get(a) == null && e.weightKg != null)) map.set(a, e.weightKg);
     }
   }
   return map;
 }
+
 
 function lookupWeight(map, name) {
   for (const a of aliases(name)) {
@@ -245,7 +286,8 @@ async function buildProgram(env) {
     const sections = parseSections(lines);
     const section = sections[wanted - 1] || sections[0] || { label: null, exercises: [] };
 
-    const wmap = await weightMap(env, page);
+    const relExercises = await relationExercises(env, page);
+    const wmap = weightMapFrom(relExercises);
     const exercises = section.exercises.map((e) => {
       const dbKg = lookupWeight(wmap, e.name);
       const fromContent = e.weights && e.weights.length ? e.weights : [];
@@ -258,6 +300,28 @@ async function buildProgram(env) {
         weightSource: fromContent.length ? 'contenu' : dbKg != null ? 'base Exercices' : null,
       };
     });
+
+    // Filet de sécurité : un exercice LIÉ au workout mais absent du contenu ne doit pas
+    // disparaître de la séance. Il est ajouté en fin de liste avec des valeurs neutres,
+    // à ajuster (ou à écrire dans le contenu pour reprendre la main).
+    const seen = exercises.map((e) => e.name);
+    for (const re of relExercises) {
+      const already = seen.some((n) => sameExercise(n, re.name));
+      if (already) continue;
+      exercises.push({
+        name: re.name,
+        sets: 3,
+        reps: 10,
+        repsMax: null,
+        superset: null,
+        order: exercises.length + 1,
+        weights: re.weightKg != null ? [re.weightKg] : [],
+        weightKg: re.weightKg,
+        hasWeight: re.weightKg != null,
+        weightSource: re.weightKg != null ? 'base Exercices' : null,
+        fromRelation: true, // absent du contenu : valeurs par défaut
+      });
+    }
 
     workouts.push({
       notionId: rel.id,
