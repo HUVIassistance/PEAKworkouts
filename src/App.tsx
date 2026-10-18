@@ -37,6 +37,7 @@ import { ExerciseLibraryView } from './components/ExerciseLibraryView.tsx';
 import { ActiveWorkoutView } from './components/ActiveWorkoutView.tsx';
 import { AiWorkoutModal } from './components/AiWorkoutModal.tsx';
 import { WorkoutSummaryModal } from './components/WorkoutSummaryModal.tsx';
+import { BrandMark } from './components/BrandMark.tsx';
 import { GeneratedWorkout } from './server/workoutGenerator.ts';
 import {
   Home,
@@ -390,7 +391,7 @@ export default function App() {
                 className="flex items-center gap-2.5 cursor-pointer select-none"
               >
                 <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#f47b20] to-[#ff9a47] flex items-center justify-center text-white shrink-0 shadow-sm">
-                  <Flame className="w-4 h-4" />
+                  <BrandMark size={19} />
                 </div>
                 <div>
                   <h1 className="text-base sm:text-lg font-black text-white tracking-tight flex items-baseline gap-1.5">
