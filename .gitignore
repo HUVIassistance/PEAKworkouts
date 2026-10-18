@@ -6,3 +6,4 @@ dist/
 *.local
 worker/.dev.vars
 package-lock.json
+worker/.wrangler/
