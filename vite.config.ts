@@ -39,10 +39,11 @@ function geminiWorkoutApiPlugin(): Plugin {
 
 export default defineConfig(() => {
   return {
-    // GitHub Pages sert ce dépôt à https://huviassistance.github.io/PEAKworkouts/
-    // => la base DOIT être le nom exact du dépôt ('/PEAKworkouts/'), sinon les
-    // assets buildés pointent vers /huviassistance/assets/... et renvoient 404 (page blanche).
-    base: '/PEAKworkouts/',
+    // Le site est servi à la RACINE de son domaine (https://train.huvioptimisation.com/)
+    // et non plus sous /PEAKworkouts/. Une base RELATIVE ('./') fonctionne dans les DEUX
+    // cas (domaine custom à la racine ET URL de projet /PEAKworkouts/) — c'est ce qui évite
+    // de repasser en page blanche au prochain changement de domaine.
+    base: './',
     plugins: [react(), tailwindcss(), geminiWorkoutApiPlugin()],
     resolve: {
       alias: {
