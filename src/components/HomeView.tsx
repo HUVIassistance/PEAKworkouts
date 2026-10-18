@@ -220,7 +220,17 @@ export const HomeView: React.FC<HomeViewProps> = ({
               Bonjour, {getSettings().firstName} !
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 max-w-xl">
-              Rythme 3x par semaine : 1 jour Musculation alterné avec 1 jour « Bouger », 7e jour Repos.
+              {(() => {
+                const p = getSettings().planning;
+                if (p && (p.muscu || p.cardio || p.repos)) {
+                  const bits: string[] = [];
+                  if (p.muscu) bits.push(p.muscu + 'x musculation');
+                  if (p.cardio) bits.push(p.cardio + 'x cardio');
+                  if (p.repos) bits.push(p.repos + ' jour' + (p.repos > 1 ? 's' : '') + ' de repos');
+                  return 'Rythme hebdo : ' + bits.join(' · ') + '.';
+                }
+                return 'Rythme 3x par semaine : 1 jour Musculation alterné avec 1 jour « Bouger », 7e jour Repos.';
+              })()}
             </p>
           </div>
 

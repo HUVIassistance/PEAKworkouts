@@ -26,6 +26,11 @@ export interface AppSettings {
   vibrationEnabled: boolean;
   /** Prénom affiché dans l'accueil (« Bonjour, Hugo ! »). */
   firstName: string;
+  /** Planning hebdomadaire (synchronisé depuis Notion). */
+  planning?: { muscu: number | null; cardio: number | null; repos: number | null };
+  /** ID Notion du programme actif (traçabilité du dernier sync). */
+  notionProgramId?: string;
+  lastSyncAt?: string;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -34,6 +39,20 @@ export const DEFAULT_SETTINGS: AppSettings = {
   vibrationEnabled: true,
   firstName: 'Hugo',
 };
+
+/** Ajoute ou met à jour un exercice personnalisé (banque locale). */
+export function saveCustomExercise(def: ExerciseDefinition): void {
+  try {
+    const raw = localStorage.getItem(CUSTOM_EXERCISES_KEY);
+    const custom: ExerciseDefinition[] = raw ? JSON.parse(raw) : [];
+    const i = custom.findIndex((c) => c.id === def.id);
+    if (i >= 0) custom[i] = def;
+    else custom.push(def);
+    localStorage.setItem(CUSTOM_EXERCISES_KEY, JSON.stringify(custom));
+  } catch {
+    // Ignore
+  }
+}
 
 export function getSettings(): AppSettings {
   try {

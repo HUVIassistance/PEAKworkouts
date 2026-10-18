@@ -49,8 +49,10 @@ import {
   Play,
   Utensils,
   Calendar,
+  RefreshCw,
 } from 'lucide-react';
 import { soundEngine } from './utils/audio.ts';
+import { syncProgram, pushSessionToNotion } from './services/peakApi.ts';
 
 type NavigationTab = 'home' | 'workouts' | 'nutrition' | 'progression' | 'history' | 'exercises';
 
@@ -72,6 +74,38 @@ export default function App() {
   // Modals
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
+
+  // Synchronisation Notion
+  const [syncState, setSyncState] = useState<'idle' | 'busy' | 'ok' | 'err'>('idle');
+  const [syncMsg, setSyncMsg] = useState('');
+
+  const handleSyncNotion = async () => {
+    if (syncState === 'busy') return;
+    setSyncState('busy');
+    setSyncMsg('Synchronisation…');
+    try {
+      const summary = await syncProgram();
+      setRoutines(getRoutines());
+      setPrograms(getPrograms());
+      setExercises(getAllExercises());
+      setActiveProgramIdState(getActiveProgramId());
+      setSyncState('ok');
+      setSyncMsg(
+        summary.programName +
+          ' — ' +
+          summary.workouts +
+          ' workouts, ' +
+          summary.exercises +
+          ' exercices' +
+          (summary.createdExercises ? ' (' + summary.createdExercises + ' ajoutés)' : '')
+      );
+      setTimeout(() => setSyncState('idle'), 8000);
+    } catch (err: any) {
+      setSyncState('err');
+      setSyncMsg(err?.message || 'Synchronisation impossible');
+      setTimeout(() => setSyncState('idle'), 8000);
+    }
+  };
 
   // Load initial data
   useEffect(() => {
@@ -330,6 +364,9 @@ export default function App() {
 
     saveWorkoutLog(newLog);
 
+    // Miroir Notion : fire-and-forget, ne bloque jamais la fin de séance.
+    void pushSessionToNotion(newLog);
+
     setHistory(getWorkoutHistory());
     setPersonalRecords(getPersonalRecords());
 
@@ -418,8 +455,24 @@ export default function App() {
                 </button>
               )}
 
-              {/* Quick AI Agent Button */}
+              {/* Quick actions : sync Notion + agent IA */}
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSyncNotion}
+                  disabled={syncState === 'busy'}
+                  title="Importer le programme actif depuis Notion"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#16223b] hover:bg-[#233556] border text-xs font-semibold transition disabled:opacity-60 ${
+                    syncState === 'err'
+                      ? 'border-rose-500/60 text-rose-300'
+                      : syncState === 'ok'
+                      ? 'border-emerald-500/60 text-emerald-300'
+                      : 'border-[#233556] text-slate-200 hover:text-white hover:border-[#f47b20]'
+                  }`}
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${syncState === 'busy' ? 'animate-spin text-[#f47b20]' : 'text-slate-400'}`} />
+                  <span>{syncState === 'busy' ? 'Sync…' : 'Synchroniser'}</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => setIsAiModalOpen(true)}
@@ -430,6 +483,18 @@ export default function App() {
                 </button>
               </div>
             </div>
+
+            {syncState !== 'idle' && syncMsg && (
+              <div className="max-w-5xl mx-auto mt-1.5">
+                <p
+                  className={`text-[11px] font-medium truncate ${
+                    syncState === 'err' ? 'text-rose-300' : syncState === 'ok' ? 'text-emerald-300' : 'text-slate-400'
+                  }`}
+                >
+                  {syncMsg}
+                </p>
+              </div>
+            )}
 
             {/* Navigation Tabs Bar with Accueil, Workouts, Nutrition, Suivi, Historique, Bibliothèque */}
             <div className="max-w-5xl mx-auto mt-2.5 flex items-center justify-start gap-1 sm:gap-1.5 border-t border-[#1e2a42] pt-2 overflow-x-auto no-scrollbar">
