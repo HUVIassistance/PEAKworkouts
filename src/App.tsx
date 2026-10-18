@@ -97,7 +97,8 @@ export default function App() {
           ' workouts, ' +
           summary.exercises +
           ' exercices' +
-          (summary.createdExercises ? ' (' + summary.createdExercises + ' ajoutés)' : '')
+          (summary.createdExercises ? ' (' + summary.createdExercises + ' ajoutés)' : '') +
+          (summary.removedExercises ? ' · ' + summary.removedExercises + ' doublon(s) retiré(s)' : '')
       );
       setTimeout(() => setSyncState('idle'), 8000);
     } catch (err: any) {

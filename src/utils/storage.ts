@@ -54,6 +54,31 @@ export function saveCustomExercise(def: ExerciseDefinition): void {
   }
 }
 
+/**
+ * Supprime les exercices créés automatiquement par un import Notion qui ne sont
+ * plus référencés par aucune routine (doublons d'anciens imports).
+ * Ne touche JAMAIS aux exercices ajoutés à la main : seuls les ids issus de
+ * l'import (`custom-notion-…`) et la liste d'ids historiques transmise sont éligibles.
+ */
+export function pruneImportedExercises(keepIds: string[], legacyIds: string[]): number {
+  try {
+    const raw = localStorage.getItem(CUSTOM_EXERCISES_KEY);
+    if (!raw) return 0;
+    const custom: ExerciseDefinition[] = JSON.parse(raw);
+    const keep = new Set(keepIds);
+    const legacy = new Set(legacyIds);
+    const kept = custom.filter((c) => {
+      const fromImporter = c.id.startsWith('custom-notion-') || legacy.has(c.id);
+      return !(fromImporter && !keep.has(c.id));
+    });
+    const removed = custom.length - kept.length;
+    if (removed > 0) localStorage.setItem(CUSTOM_EXERCISES_KEY, JSON.stringify(kept));
+    return removed;
+  } catch {
+    return 0;
+  }
+}
+
 export function getSettings(): AppSettings {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);

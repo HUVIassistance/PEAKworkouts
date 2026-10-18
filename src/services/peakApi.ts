@@ -8,6 +8,7 @@ import {
 import {
   getAllExercises,
   saveCustomExercise,
+  pruneImportedExercises,
   saveRoutine,
   saveProgram,
   getSettings,
@@ -57,6 +58,7 @@ export interface SyncSummary {
   workouts: number;
   exercises: number;
   createdExercises: number;
+  removedExercises: number;
   warnings: string[];
 }
 
@@ -71,6 +73,42 @@ const norm = (s: string) =>
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
 
+/**
+ * Synonymes rencontrés entre le CONTENU Notion et la base « Exercices ».
+ * Sans cette table, chaque variante d'écriture créait un exercice en double
+ * dans la bibliothèque du site. Notion a été uniformisé (2026-10-18) mais la
+ * table reste : elle protège des reformulations futures.
+ */
+const EXERCISE_ALIASES: Record<string, string> = {
+  'bar dips': 'dips on bar',
+  'dips': 'dips on bar',
+  'seated band rows': 'seated w row',
+  'seated cable row': 'seated w row',
+  'dumbell curls': 'bicep curls',
+  'dumbbell curls': 'bicep curls',
+  'dumbell rows': 'dumbbell rows',
+  'dumbell row': 'dumbbell rows',
+  'dumbell press': 'dumbbell press',
+  'hip thruzt glute bridge': 'hip thrusts',
+  'hip thrust glute bridge': 'hip thrusts',
+  'hip thrust': 'hip thrusts',
+  'glute bridge': 'hip thrusts',
+  'push ups': 'push ups',
+  'pushups': 'push ups',
+  'deadbug': 'deadbug',
+  'rdl': 'romanian deadlifts',
+};
+
+/** Exercices créés par d'anciens imports qui doivent disparaître une fois inutiles. */
+const LEGACY_IMPORT_IDS = [
+  'custom-bar-dips',
+  'custom-seated-band-rows',
+  'custom-dumbell-curls',
+  'custom-hip-thruzt-glute-bridge',
+];
+
+const canonical = (name: string) => EXERCISE_ALIASES[norm(name)] || norm(name);
+
 function slug(s: string): string {
   return norm(s).replace(/\s+/g, '-').slice(0, 40);
 }
@@ -79,18 +117,18 @@ function slug(s: string): string {
  *  dans Notion doit apparaître sur le site, pas être ignoré). */
 function findOrCreateExercise(name: string, created: string[]): ExerciseDefinition {
   const library = getAllExercises();
-  const target = norm(name);
-  const hit = library.find((e) => norm(e.name) === target);
+  const target = canonical(name);
+  const hit = library.find((e) => canonical(e.name) === target);
   if (hit) return hit;
 
   const fuzzy = library.find((e) => {
-    const n = norm(e.name);
+    const n = canonical(e.name);
     return n.length > 3 && (n.includes(target) || target.includes(n));
   });
   if (fuzzy) return fuzzy;
 
   const def: ExerciseDefinition = {
-    id: 'custom-' + (slug(name) || Math.random().toString(36).slice(2, 8)),
+    id: 'custom-notion-' + (slug(canonical(name)) || Math.random().toString(36).slice(2, 8)),
     name,
     category: 'Corps complet',
     targetMuscle: '',
@@ -133,7 +171,13 @@ export async function syncProgram(): Promise<SyncSummary> {
 
   const created: string[] = [];
   const warnings: string[] = [];
+  const usedExerciseIds: string[] = [];
   let exerciseCount = 0;
+
+  // AVANT l'import : on retire les artefacts d'imports précédents, sinon ils sont
+  // réutilisés par la correspondance de noms et les doublons se perpétuent.
+  // Ce qui est vraiment nécessaire sera recréé juste en dessous, à l'identique.
+  const removedUpfront = pruneImportedExercises([], LEGACY_IMPORT_IDS);
 
   const workoutIds: string[] = [];
 
@@ -143,6 +187,7 @@ export async function syncProgram(): Promise<SyncSummary> {
 
     const items: RoutineExerciseItem[] = w.exercises.map((ex) => {
       const def = findOrCreateExercise(ex.name, created);
+      usedExerciseIds.push(def.id);
       exerciseCount += 1;
       if (!ex.hasWeight) warnings.push(ex.name + ' : aucune charge dans Notion (0 kg)');
       return {
@@ -191,11 +236,15 @@ export async function syncProgram(): Promise<SyncSummary> {
     lastSyncAt: new Date().toISOString(),
   });
 
+  // Doublons d'anciens imports : retirés seulement s'ils ne servent plus.
+  const removedAfter = pruneImportedExercises(usedExerciseIds, LEGACY_IMPORT_IDS);
+
   return {
     programName: program.name,
     workouts: program.workouts.length,
     exercises: exerciseCount,
     createdExercises: created.length,
+    removedExercises: removedUpfront + removedAfter,
     warnings,
   };
 }
