@@ -50,7 +50,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { soundEngine } from './utils/audio.ts';
-import { syncProgram, pushSessionToNotion, promoteSessionToNotion } from './services/peakApi.ts';
+import { syncProgram, pushSessionToNotion, promoteSessionToNotion, flushPendingSessions } from './services/peakApi.ts';
 
 type NavigationTab = 'home' | 'workouts' | 'nutrition' | 'progression' | 'history' | 'exercises';
 
@@ -114,6 +114,9 @@ export default function App() {
     setExercises(getAllExercises());
     setHistory(getWorkoutHistory());
     setPersonalRecords(getPersonalRecords());
+
+    // Séances qui n'avaient pas pu partir (réseau coupé en salle) : on rejoue.
+    void flushPendingSessions();
 
     const savedActive = getActiveWorkoutState();
     if (savedActive && savedActive.exercises && savedActive.exercises.length > 0) {

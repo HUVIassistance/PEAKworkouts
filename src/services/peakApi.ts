@@ -300,40 +300,45 @@ export interface PushResult {
   pageId?: string;
   url?: string;
   error?: string;
+  queued?: boolean;
 }
 
-/** Envoie une séance terminée dans « Calendrier d'entrainement (Séances) ».
- *  Fire-and-forget : ne doit JAMAIS faire échouer l'enregistrement local. */
-export async function pushSessionToNotion(log: WorkoutSessionLog): Promise<PushResult> {
-  try {
-    const setsTotal = log.exercises.reduce((acc, ex) => acc + (ex.sets?.length || 0), 0);
-    // On n'envoie QUE ce qui a réellement été validé : le prévu vit dans le programme,
-    // pas dans le journal de séance. Le nombre de séries est libre en séance.
-    const performed = (log.exercises || [])
-      .map((ex) => ({
-        name: ex.exerciseName,
-        sets: (ex.sets || [])
-          .filter((s) => s.completed)
-          .map((s) => ({ weight: s.weight, reps: s.reps })),
-      }))
-      .filter((ex) => ex.sets.length > 0);
+/** File d'attente des séances non transmises (réseau coupé en salle, API en vrac…).
+ *  Elle vit en localStorage : rien ne se perd, et le renvoi est rejoué au prochain
+ *  démarrage de l'app. La déduplication par Session ID évite tout doublon. */
+const PENDING_KEY = 'peakform_pending_sessions_v1';
 
-    const payload = {
-      sessionId: log.id,
-      title: log.routineName + ' — ' + log.dateString,
-      date: log.dateString,
-      durationMin: Math.round((log.durationSeconds || 0) / 60),
-      setsDone: log.totalSetsCompleted,
-      setsPlanned: setsTotal,
-      volumeKg: Math.round(log.totalVolumeKg || 0),
-      notes: log.notes,
-      // Rattachements Notion : le workout fait (page « Mes workouts ») et le programme.
-      workoutNotionId: (log.routineId || '').startsWith('notion-')
-        ? log.routineId!.replace(/^notion-/, '')
-        : undefined,
-      programNotionId: getSettings().notionProgramId || undefined,
-      exercises: performed,
-    };
+function buildSessionPayload(log: WorkoutSessionLog) {
+  const setsTotal = log.exercises.reduce((acc, ex) => acc + (ex.sets?.length || 0), 0);
+  // On n'envoie QUE ce qui a réellement été validé : le prévu vit dans le programme,
+  // pas dans le journal de séance. Le nombre de séries est libre en séance.
+  const performed = (log.exercises || [])
+    .map((ex) => ({
+      name: ex.exerciseName,
+      sets: (ex.sets || []).filter((s) => s.completed).map((s) => ({ weight: s.weight, reps: s.reps })),
+    }))
+    .filter((ex) => ex.sets.length > 0);
+
+  return {
+    sessionId: log.id,
+    title: log.routineName + ' — ' + log.dateString,
+    date: log.dateString,
+    durationMin: Math.round((log.durationSeconds || 0) / 60),
+    setsDone: log.totalSetsCompleted,
+    setsPlanned: setsTotal,
+    volumeKg: Math.round(log.totalVolumeKg || 0),
+    notes: log.notes,
+    // Rattachements Notion : le workout fait (page « Mes workouts ») et le programme.
+    workoutNotionId: (log.routineId || '').startsWith('notion-') ? log.routineId!.replace(/^notion-/, '') : undefined,
+    programNotionId: getSettings().notionProgramId || undefined,
+    exercises: performed,
+  };
+}
+
+type SessionPayload = ReturnType<typeof buildSessionPayload>;
+
+async function sendSession(payload: SessionPayload): Promise<PushResult> {
+  try {
     const res = await fetch(API_BASE + '/session', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-peak-key': PEAK_KEY },
@@ -350,3 +355,53 @@ export async function pushSessionToNotion(log: WorkoutSessionLog): Promise<PushR
     return { ok: false, error: err?.message || 'réseau' };
   }
 }
+
+function readPending(): SessionPayload[] {
+  try {
+    const raw = localStorage.getItem(PENDING_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writePending(list: SessionPayload[]): void {
+  try {
+    localStorage.setItem(PENDING_KEY, JSON.stringify(list));
+  } catch {
+    // Ignore
+  }
+}
+
+/** Envoie une séance terminée dans « Calendrier d'entrainement (Séances) ».
+ *  Ne fait JAMAIS échouer l'enregistrement local : en cas d'échec, la séance
+ *  est mise en file et renvoyée plus tard. */
+export async function pushSessionToNotion(log: WorkoutSessionLog): Promise<PushResult> {
+  const payload = buildSessionPayload(log);
+  const res = await sendSession(payload);
+  if (!res.ok) {
+    const pending = readPending().filter((p) => p.sessionId !== payload.sessionId);
+    pending.push(payload);
+    writePending(pending);
+    return { ...res, queued: true };
+  }
+  return res;
+}
+
+/** Rejoue les séances en attente. Appelé au démarrage de l'app. */
+export async function flushPendingSessions(): Promise<{ sent: number; remaining: number }> {
+  const pending = readPending();
+  if (!pending.length) return { sent: 0, remaining: 0 };
+
+  const remaining: SessionPayload[] = [];
+  let sent = 0;
+  for (const p of pending) {
+    const r = await sendSession(p);
+    if (r.ok) sent += 1;
+    else remaining.push(p);
+  }
+  writePending(remaining);
+  if (sent) console.info('[peak-api] séances en attente transmises :', sent);
+  return { sent, remaining: remaining.length };
+}
+
