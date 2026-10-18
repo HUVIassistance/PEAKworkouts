@@ -250,7 +250,49 @@ export async function syncProgram(): Promise<SyncSummary> {
   };
 }
 
-// ------------------------------------------------------------------ app → Notion
+// ------------------------------------------------------------------ promouvoir en programme
+
+export interface PromoteResult {
+  ok: boolean;
+  updated: { exercise: string; before: string; after: string }[];
+  skipped: string[];
+  error?: string;
+}
+
+/** Réécrit la prescription du workout Notion avec ce qui a réellement été fait.
+ *  « Push-ups 3x12-15 @ 5 kg » -> « Push-ups 4x12 @ 5/5/5/6 kg ». */
+export async function promoteSessionToNotion(log: WorkoutSessionLog): Promise<PromoteResult> {
+  const routineId = log.routineId || '';
+  if (!routineId.startsWith('notion-')) {
+    return { ok: false, updated: [], skipped: [], error: 'Cette séance ne vient pas d’un programme Notion.' };
+  }
+  const workoutNotionId = routineId.replace(/^notion-/, '');
+  const exercises = (log.exercises || [])
+    .map((ex) => ({
+      name: ex.exerciseName,
+      sets: (ex.sets || []).filter((s) => s.completed).map((s) => ({ weight: s.weight, reps: s.reps })),
+    }))
+    .filter((ex) => ex.sets.length > 0);
+
+  if (!exercises.length) {
+    return { ok: false, updated: [], skipped: [], error: 'Aucune série validée : rien à reporter.' };
+  }
+
+  try {
+    const res = await fetch(API_BASE + '/promote', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-peak-key': PEAK_KEY },
+      body: JSON.stringify({ workoutNotionId, exercises }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.ok === false) {
+      return { ok: false, updated: [], skipped: [], error: data.error || 'HTTP ' + res.status };
+    }
+    return { ok: true, updated: data.updated || [], skipped: data.skipped || [] };
+  } catch (err: any) {
+    return { ok: false, updated: [], skipped: [], error: err?.message || 'réseau' };
+  }
+}
 
 export interface PushResult {
   ok: boolean;

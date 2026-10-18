@@ -8,6 +8,8 @@ interface WorkoutSummaryModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (notes: string, feeling: '🔥 Top' | '💪 Bon' | '😐 Moyen' | '🥵 Difficile') => void;
+  /** Enregistre la séance ET réécrit la prescription Notion avec le réalisé. */
+  onSaveAndPromote?: (notes: string, feeling: '🔥 Top' | '💪 Bon' | '😐 Moyen' | '🥵 Difficile') => void;
   routineName: string;
   durationSeconds: number;
   exercises: ActiveExerciseItem[];
@@ -18,6 +20,7 @@ export const WorkoutSummaryModal: React.FC<WorkoutSummaryModalProps> = ({
   isOpen,
   onClose,
   onSave,
+  onSaveAndPromote,
   routineName,
   durationSeconds,
   exercises,
@@ -181,6 +184,17 @@ export const WorkoutSummaryModal: React.FC<WorkoutSummaryModalProps> = ({
             <CheckCircle className="w-3.5 h-3.5" /> Enregistrer et clôturer
           </button>
         </div>
+
+        {onSaveAndPromote && (
+          <button
+            type="button"
+            onClick={() => onSaveAndPromote(notes, feeling)}
+            className="w-full py-2 rounded-xl font-semibold text-[11px] bg-[#16223b] hover:bg-[#233556] text-slate-300 hover:text-white border border-[#233556] hover:border-[#f47b20] transition flex items-center justify-center gap-1.5"
+            title="Réécrit la prescription du workout Notion avec les séries et charges réellement faites"
+          >
+            Enregistrer + mettre à jour le programme Notion
+          </button>
+        )}
       </div>
     </div>
   );

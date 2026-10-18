@@ -50,7 +50,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { soundEngine } from './utils/audio.ts';
-import { syncProgram, pushSessionToNotion } from './services/peakApi.ts';
+import { syncProgram, pushSessionToNotion, promoteSessionToNotion } from './services/peakApi.ts';
 
 type NavigationTab = 'home' | 'workouts' | 'nutrition' | 'progression' | 'history' | 'exercises';
 
@@ -66,6 +66,7 @@ export default function App() {
   // Active workout state
   const [isActiveWorkoutOpen, setIsActiveWorkoutOpen] = useState(false);
   const [activeRoutineName, setActiveRoutineName] = useState<string>('');
+  const [activeRoutineId, setActiveRoutineId] = useState<string>('');
   const [activeExercises, setActiveExercises] = useState<ActiveExerciseItem[]>([]);
   const [activeSessionStartTime, setActiveSessionStartTime] = useState<number>(0);
 
@@ -194,6 +195,7 @@ export default function App() {
     });
 
     setActiveRoutineName(routine.name);
+    setActiveRoutineId(routine.id);
     setActiveExercises(exerciseItems);
     setActiveSessionStartTime(Date.now());
     setIsActiveWorkoutOpen(true);
@@ -258,7 +260,8 @@ export default function App() {
 
   const handleSaveCompletedWorkoutSession = (
     notes: string,
-    feeling: '🔥 Top' | '💪 Bon' | '😐 Moyen' | '🥵 Difficile'
+    feeling: '🔥 Top' | '💪 Bon' | '😐 Moyen' | '🥵 Difficile',
+    promoteToProgram = false
   ) => {
     const now = Date.now();
     const durationSeconds = Math.max(10, Math.floor((now - activeSessionStartTime) / 1000));
@@ -288,6 +291,7 @@ export default function App() {
 
     const newLog: WorkoutSessionLog = {
       id: `log-${now}`,
+      routineId: activeRoutineId || undefined,
       routineName: activeRoutineName,
       startTime: activeSessionStartTime,
       endTime: now,
@@ -305,11 +309,33 @@ export default function App() {
     // Miroir Notion : fire-and-forget, ne bloque jamais la fin de séance.
     void pushSessionToNotion(newLog);
 
+    // Promotion de la séance en prescription (bouton explicite uniquement).
+    if (promoteToProgram) {
+      setSyncState('busy');
+      setSyncMsg('Mise à jour du programme Notion…');
+      void promoteSessionToNotion(newLog).then((r) => {
+        if (r.ok) {
+          setSyncState('ok');
+          setSyncMsg(
+            'Programme Notion mis à jour — ' +
+              r.updated.length +
+              ' exercice(s)' +
+              (r.skipped.length ? ' · ' + r.skipped.length + ' ignoré(s)' : '')
+          );
+        } else {
+          setSyncState('err');
+          setSyncMsg('Programme non mis à jour : ' + (r.error || 'erreur inconnue'));
+        }
+        setTimeout(() => setSyncState('idle'), 10000);
+      });
+    }
+
     setHistory(getWorkoutHistory());
     setPersonalRecords(getPersonalRecords());
 
     setActiveExercises([]);
     setActiveRoutineName('');
+    setActiveRoutineId('');
     saveActiveWorkoutState(null);
 
     setIsSummaryModalOpen(false);
@@ -582,6 +608,7 @@ export default function App() {
         isOpen={isSummaryModalOpen}
         onClose={() => setIsSummaryModalOpen(false)}
         onSave={handleSaveCompletedWorkoutSession}
+        onSaveAndPromote={(notes, feeling) => handleSaveCompletedWorkoutSession(notes, feeling, true)}
         routineName={activeRoutineName}
         durationSeconds={Math.max(10, Math.floor((Date.now() - activeSessionStartTime) / 1000))}
         exercises={activeExercises}

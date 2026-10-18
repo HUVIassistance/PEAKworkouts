@@ -10,6 +10,7 @@ Le token Notion vit **uniquement** ici (secret Cloudflare) : il ne touche jamais
 | `/health` | GET | ping (`hasNotionToken` indique si le secret est en place) |
 | `/program` | GET | programme **actif** Notion + workouts + exercices + planning |
 | `/session` | POST | crée une page dans « Calendrier d'entrainement (Séances) », dédupliqué par `Session ID` |
+| `/promote` | POST | réécrit la **prescription** du workout Notion avec le réalisé (`3x12-15 @ 5` → `4x12 @ 5/5/5/6`) |
 
 Toutes les routes (sauf `/health`) exigent l'en-tête `x-peak-key`.
 

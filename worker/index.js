@@ -94,7 +94,7 @@ async function blockLines(env, blockId, depth) {
     const body = b[type] || {};
     const text = rt(body.rich_text).trim();
     if (text && ['paragraph', 'bulleted_list_item', 'numbered_list_item', 'heading_1', 'heading_2', 'heading_3', 'quote', 'toggle'].indexOf(type) >= 0) {
-      lines.push({ text, type });
+      lines.push({ id: b.id, text, type });
     }
     if (b.has_children) {
       const kids = await blockLines(env, b.id, d + 1);
@@ -335,6 +335,85 @@ async function pushSession(env, body) {
   return { ok: true, deduped: false, pageId: page.id, url: page.url, exercises: (body.exercises || []).length };
 }
 
+// ---------------------------------------------------------------- /promote
+
+/** Réécrit la prescription d'un workout dans Notion à partir de ce qui a été
+ *  réellement fait : « Push-ups 3x12-15 @ 5 kg » -> « Push-ups 4x12 @ 5/5/5/6 kg ». */
+async function promoteSession(env, body) {
+  const pageId = String(body.workoutNotionId || '').trim();
+  if (!pageId) throw new Error('workoutNotionId requis');
+  const performed = (body.exercises || []).filter((e) => (e.sets || []).length);
+  if (!performed.length) throw new Error('aucune série réalisée à promouvoir');
+
+  const page = await notion(env, '/v1/pages/' + pageId);
+  const title = rt(page.properties.Workouts && page.properties.Workouts.title);
+  const m = title.match(/s[ée]ance\s*(\d+)/i);
+  const wanted = m ? parseInt(m[1], 10) : 1;
+
+  const lines = await blockLines(env, pageId, 0);
+
+  // On ne réécrit que la section correspondant au workout (contenu parfois dupliqué).
+  let sectionIdx = -1;
+  const inSection = [];
+  for (const ln of lines) {
+    if (SECTION_RE.test(ln.text)) {
+      sectionIdx += 1;
+      continue;
+    }
+    if (sectionIdx === wanted - 1) inSection.push(ln);
+  }
+  const scope = inSection.length ? inSection : lines;
+
+  const updated = [];
+  const skipped = [];
+
+  for (const ex of performed) {
+    const target = norm(ex.name);
+    const line = scope.find((ln) => {
+      const mm = ln.text.match(EXO_RE);
+      return mm && norm(mm[1]) === target;
+    });
+    if (!line) {
+      skipped.push(ex.name);
+      continue;
+    }
+
+    const mm = line.text.match(EXO_RE);
+    const displayName = mm[1].trim();
+    const sets = ex.sets;
+    const reps = sets.map((s) => parseInt(s.reps, 10)).filter((n) => !isNaN(n));
+    const ws = sets.map((s) => Number(s.weight) || 0);
+
+    const repsPart =
+      reps.length === 0
+        ? '10'
+        : Math.min(...reps) === Math.max(...reps)
+        ? String(reps[0])
+        : Math.min(...reps) + '-' + Math.max(...reps);
+
+    const uniqW = [...new Set(ws)];
+    const weightPart =
+      ws.every((w) => w === 0)
+        ? ''
+        : uniqW.length === 1
+        ? ' @ ' + uniqW[0] + ' kg'
+        : ' @ ' + ws.join('/') + ' kg';
+
+    const newText = displayName + ' ' + sets.length + 'x' + repsPart + weightPart;
+    if (newText === line.text.trim()) {
+      skipped.push(ex.name + ' (inchangé)');
+      continue;
+    }
+
+    const res = await notion(env, '/v1/blocks/' + line.id, {
+      paragraph: { rich_text: [{ type: 'text', text: { content: newText } }] },
+    }, 'PATCH');
+    updated.push({ exercise: displayName, before: line.text, after: newText, ok: !!res.id });
+  }
+
+  return { ok: true, workout: title, section: wanted, updated, skipped };
+}
+
 // ---------------------------------------------------------------- router
 
 export default {
@@ -360,6 +439,11 @@ export default {
       if (url.pathname === '/session' && request.method === 'POST') {
         const body = await request.json();
         return json(await pushSession(env, body), 200, origin);
+      }
+
+      if (url.pathname === '/promote' && request.method === 'POST') {
+        const body = await request.json();
+        return json(await promoteSession(env, body), 200, origin);
       }
 
       return json({ ok: false, error: 'route inconnue: ' + url.pathname }, 404, origin);
