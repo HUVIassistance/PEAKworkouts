@@ -449,13 +449,13 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
       <header className="sticky top-0 z-40 bg-[#111a2e] border-b-2 border-[#233556] shadow-2xl">
         <div className="max-w-2xl mx-auto px-4 py-3 space-y-3">
           {/* Top row: session name, prominent timer, actions */}
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
               <button
                 type="button"
-                onClick={onExitActiveMode}
-                className="p-2 rounded-xl bg-[#16223b] hover:bg-[#233556] text-slate-300 hover:text-white transition border border-[#233556]"
-                title="Réduire"
+                onClick={() => setShowCancelModal(true)}
+                className="p-2 rounded-xl bg-[#16223b] hover:bg-rose-950/40 text-slate-300 hover:text-rose-300 transition border border-[#233556] hover:border-rose-800 shrink-0"
+                title="Quitter et annuler la séance"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
@@ -470,29 +470,29 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
             </div>
 
             {/* VERY PROMINENT CHRONOMETER BADGE */}
-            <div className="flex items-center gap-2 bg-[#0a0f1d] border-2 border-[#f47b20]/60 rounded-2xl px-4 py-1.5 shadow-[0_0_15px_rgba(244,123,32,0.2)]">
+            <div className="flex items-center gap-1.5 bg-[#0a0f1d] border-2 border-[#f47b20]/60 rounded-2xl px-2 py-1 sm:px-4 sm:py-1.5 shadow-[0_0_15px_rgba(244,123,32,0.2)] shrink-0">
               <button
                 type="button"
                 onClick={() => setIsElapsedRunning(!isElapsedRunning)}
-                className="w-7 h-7 rounded-lg bg-[#f47b20] hover:bg-[#e06810] text-white flex items-center justify-center transition shadow-sm"
+                className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-[#f47b20] hover:bg-[#e06810] text-white flex items-center justify-center transition shadow-sm shrink-0"
                 title={isElapsedRunning ? 'Mettre en pause' : 'Reprendre'}
               >
                 {isElapsedRunning ? (
-                  <Pause className="w-3.5 h-3.5 fill-current" />
+                  <Pause className="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-current" />
                 ) : (
-                  <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
+                  <Play className="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-current ml-0.5" />
                 )}
               </button>
 
               <div className="flex items-baseline gap-1">
-                <span className="font-mono-numbers text-xl sm:text-2xl font-black text-white tracking-wider">
+                <span className="font-mono-numbers text-base sm:text-2xl font-black text-white tracking-tight sm:tracking-wider">
                   {formatTime(elapsedSeconds)}
                 </span>
               </div>
             </div>
 
-            {/* Secondary actions: Overview, sound, cancel, finish */}
-            <div className="flex items-center gap-1.5">
+            {/* Secondary actions: Overview, sound, finish (2e ligne sur mobile) */}
+            <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end sm:justify-start pt-1 sm:pt-0">
               <button
                 type="button"
                 onClick={() => setShowOverview(true)}
@@ -519,15 +519,7 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
                 )}
               </button>
 
-              {/* CANCEL / ABANDON WORKOUT BUTTON */}
-              <button
-                type="button"
-                onClick={() => setShowCancelModal(true)}
-                className="p-2 rounded-xl bg-[#16223b] hover:bg-rose-950/40 text-slate-400 hover:text-rose-300 transition border border-[#233556] hover:border-rose-800"
-                title="Annuler la séance en cours (sans sauvegarder)"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              {/* La croix est redondante : la flèche de retour gère l'annulation. */}
 
               <button
                 type="button"
@@ -729,9 +721,9 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
             {/* Current Set Focused Input Card */}
             <div className="bg-[#111a2e] border border-[#233556] rounded-3xl p-5 shadow-xl space-y-4">
               <div className="flex items-center justify-between border-b border-[#233556] pb-2.5">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-[#f47b20]">
-                    Série {currentStep?.setNumber || 1} sur {currentStep?.totalSetsOfExercise}
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#f47b20] whitespace-nowrap">
+                    Série {currentStep?.setNumber || 1}/{currentStep?.totalSetsOfExercise}
                   </span>
 
                   {/* Mode switcher trigger */}
@@ -1027,11 +1019,11 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 pt-2">
+            <div className="flex flex-col sm:flex-row items-stretch gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => setShowCancelModal(false)}
-                className="flex-1 py-2.5 rounded-xl bg-[#16223b] hover:bg-[#233556] text-xs font-semibold text-slate-300 border border-[#233556] transition"
+                className="flex-1 min-w-0 py-3 px-3 rounded-xl bg-[#16223b] hover:bg-[#233556] text-xs font-semibold text-slate-300 border border-[#233556] transition"
               >
                 Continuer la séance
               </button>
@@ -1042,7 +1034,7 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
                   setShowCancelModal(false);
                   onCancelWorkout();
                 }}
-                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-xs font-bold text-white shadow-md transition"
+                className="flex-1 min-w-0 py-3 px-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-xs font-bold text-white shadow-md transition"
               >
                 Oui, abandonner
               </button>

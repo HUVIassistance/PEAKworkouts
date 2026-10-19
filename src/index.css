@@ -63,14 +63,13 @@
    explicitement plus bas, sinon elles resteraient minuscules. */
 @media (max-width: 640px) {
   html {
-    font-size: 18px; /* 16 -> 18 : tout le rem (marges, icônes, gouttières) suit */
+    font-size: 16.5px; /* compromis : lisible sans déborder sur 360-430 px */
   }
 
-  /* Échelle de lecture mobile : les utilitaires Tailwind sont recalibrés
-     pour viser ≥ 14 px de texte courant (12 px avant = besoin de zoomer). */
-  .text-xs { font-size: 0.8rem; line-height: 1.4; }   /* 14,4 px */
-  .text-sm { font-size: 0.92rem; line-height: 1.45; } /* 16,6 px */
-  .text-base { font-size: 1rem; }                     /* 18 px */
+  /* Échelle de lecture mobile : ≥ 13 px de texte courant. */
+  .text-xs { font-size: 0.8rem; line-height: 1.4; }   /* 13,2 px */
+  .text-sm { font-size: 0.92rem; line-height: 1.45; } /* 15,2 px */
+  .text-base { font-size: 1rem; }                     /* 16,5 px */
 
   .text-\[9px\] { font-size: 11px !important; }
   .text-\[10px\] { font-size: 12px !important; }
@@ -83,10 +82,8 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  /* Le header ne doit jamais forcer un défilement horizontal */
-  header {
-    overflow-x: clip;
-  }
+  /* Le header ne doit jamais forcer un défilement horizontal (mais on ne rogne
+     plus le contenu : on laisse les enfants rétrécir avec min-w-0). */
 }
 
 /* Anti « zoom au clic » : sans ça, un double-tap sur un bouton déclenche le

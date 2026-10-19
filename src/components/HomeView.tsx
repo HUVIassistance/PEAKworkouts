@@ -11,6 +11,7 @@ import {
   Calendar,
   Play,
   CheckCircle2,
+  X,
   Dumbbell,
   Clock,
   Sparkles,
@@ -55,6 +56,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   onRefreshHistory,
 }) => {
   const [bougerDates, setBougerDates] = useState<string[]>([]);
+  const [daySheet, setDaySheet] = useState<string | null>(null);
 
   useEffect(() => {
     setBougerDates(getBougerCompletedDates());
@@ -173,10 +175,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
     };
   });
 
-  // Streak calculation
+  // Streak calculation — séances ET jours marqués « fait » comptent
   const calculateStreak = (): number => {
-    if (history.length === 0) return 0;
-    const sortedDates = Array.from(new Set(history.map((h) => h.dateString))).sort().reverse();
+    const allDates = Array.from(new Set([...history.map((h) => h.dateString), ...bougerDates]));
+    if (allDates.length === 0) return 0;
+    const sortedDates = allDates.sort().reverse();
     const today = todayDateStr;
     const yesterday = localDateString(new Date(Date.now() - 86400000));
 
@@ -494,9 +497,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
         {/* 7 Days Grid */}
         <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
           {weekDays.map((day, idx) => (
-            <div
+            <button
+              type="button"
               key={idx}
-              className={`rounded-2xl p-2 sm:p-2.5 text-center flex flex-col justify-between min-h-[100px] border transition ${
+              onClick={() => setDaySheet(day.dateStr)}
+              className={`rounded-2xl p-1.5 sm:p-2.5 text-center flex flex-col justify-between min-h-[84px] sm:min-h-[100px] border transition active:scale-95 ${
                 day.isToday
                   ? 'bg-[#18253d] border-[#f47b20] shadow-md ring-1 ring-[#f47b20]'
                   : day.hasCompleted
@@ -513,32 +518,32 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 </span>
               </div>
 
-              <div className="my-1">
+              <div className="my-1 flex items-center justify-center">
                 {day.hasCompleted ? (
-                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px] font-bold mx-auto">
+                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px] font-bold">
                     ✓
                   </span>
                 ) : day.planType === 'workout' ? (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-[#f47b20]/20 text-[#f47b20] font-bold block truncate">
-                    {day.planTitle}
+                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-[#f47b20]/20 text-[#f47b20]">
+                    <Dumbbell className="w-3 h-3" />
                   </span>
                 ) : day.planType === 'bouger' ? (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-teal-500/20 text-teal-300 font-bold block truncate">
-                    Bouger
+                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-teal-500/20 text-teal-300">
+                    <Footprints className="w-3 h-3" />
                   </span>
                 ) : (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 font-bold block truncate">
-                    Repos
+                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-indigo-500/20 text-indigo-300">
+                    <Moon className="w-3 h-3" />
                   </span>
                 )}
               </div>
 
               {day.isToday && (
-                <span className="text-[8px] font-black uppercase text-[#f47b20] tracking-wider block">
-                  Aujourd'hui
+                <span className="text-[8px] font-black uppercase text-[#f47b20] tracking-tight block">
+                  AUJ.
                 </span>
               )}
-            </div>
+            </button>
           ))}
         </div>
       </div>
@@ -636,6 +641,67 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Feuille du jour : marquer une journée faite, ou lancer la séance prévue */}
+      {daySheet && (() => {
+        const sheetDay = weekDays.find((d) => d.dateStr === daySheet);
+        const isDone = !!sheetDay?.hasCompleted;
+        const isWorkoutDay = sheetDay?.planType === 'workout';
+        const routine = isWorkoutDay ? routineForWorkoutDay(weekDays.findIndex((d) => d.dateStr === daySheet)) : undefined;
+        const [y, m, d] = daySheet.split('-');
+        const label = `${d}/${m}/${y}`;
+        return (
+          <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center p-3" onClick={() => setDaySheet(null)}>
+            <div className="w-full max-w-md bg-[#111a2e] border border-[#233556] rounded-3xl p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-black text-white">{label}</h3>
+                  <p className="text-xs text-slate-400">
+                    {isWorkoutDay ? 'Séance de musculation prévue' : sheetDay?.planType === 'bouger' ? 'Journée « Bouger »' : 'Jour de repos'}
+                    {routine ? ` · ${routine.name}` : ''}
+                  </p>
+                </div>
+                <button type="button" onClick={() => setDaySheet(null)} className="p-2 rounded-xl bg-[#16223b] border border-[#233556] text-slate-300">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const nowDone = toggleBougerCompletedDate(daySheet);
+                  setBougerDates((prev) => (nowDone ? [...prev, daySheet] : prev.filter((x) => x !== daySheet)));
+                  setDaySheet(null);
+                }}
+                className={`w-full py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition ${
+                  isDone ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/40' : 'bg-[#f47b20] hover:bg-[#e06810] text-white'
+                }`}
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                {isDone ? 'Retirer la marque « fait »' : 'Marquer comme fait'}
+              </button>
+
+              {routine && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDaySheet(null);
+                    onStartRoutine(routine);
+                  }}
+                  className="w-full py-3 rounded-xl font-bold text-sm bg-[#16223b] hover:bg-[#233556] border border-[#233556] text-white flex items-center justify-center gap-2"
+                >
+                  <Play className="w-4 h-4 text-[#f47b20]" />
+                  Lancer cette séance
+                </button>
+              )}
+
+              <p className="text-[11px] text-slate-500 text-center">
+                Marquer une journée fait avancer ta série de jours consécutifs.
+              </p>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };
