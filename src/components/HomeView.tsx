@@ -83,22 +83,48 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const seanceB = programRoutines[1] || routines.find((r) => r.id === 'seance-b-epaules-pecs-renfo') || routines[1] || routines[0];
 
 
-  // --- Planning hebdomadaire piloté par Notion (champs du programme actif) --------
-  const dowIndex = now.getDay() === 0 ? 6 : now.getDay() - 1; // 0 = lundi
+  // --- Cycle d'entraînement -----------------------------------------------------
+  // Le rythme n'est PAS calé sur les jours de la semaine : c'est un cycle glissant
+  // (muscu → bouger → muscu → … → repos) ancré sur la DERNIÈRE activité réelle.
+  // Invariant garanti : le lendemain d'une séance de musculation n'est jamais une
+  // séance de musculation.
   const settingsNow = getSettings();
   const planMuscu = settingsNow.planning?.muscu ?? 3;
   const planCardio = settingsNow.planning?.cardio ?? 3;
-  // Motif de la semaine : alternance muscu / cardio, le repos tombe en fin de semaine.
-  const weekPattern: ('workout' | 'bouger' | 'repos')[] = (() => {
+
+  const toDate = (s: string) => {
+    const [y, m, d] = s.split('-').map(Number);
+    return new Date(y, (m || 1) - 1, d || 1);
+  };
+  const daysBetween = (a: string, b: string) =>
+    Math.round((toDate(b).getTime() - toDate(a).getTime()) / 86400000);
+
+  const activityDates = Array.from(
+    new Set([...history.map((h) => h.dateString), ...bougerDates])
+  ).sort();
+  const lastActivity = activityDates.length ? activityDates[activityDates.length - 1] : todayDateStr;
+  const lastWasWorkout = history.some((h) => h.dateString === lastActivity);
+  const anchorType: 'workout' | 'bouger' = lastWasWorkout ? 'workout' : 'bouger';
+
+  // Cycle complet : alternance à partir du type de l'ancre, repos en fin de cycle.
+  const cycle: ('workout' | 'bouger' | 'repos')[] = (() => {
     const out: ('workout' | 'bouger' | 'repos')[] = [];
     let m = planMuscu;
     let c = planCardio;
+    let next: 'workout' | 'bouger' = anchorType;
     while (m > 0 || c > 0) {
-      if (m > 0) {
+      if (next === 'workout' && m > 0) {
         out.push('workout');
         m -= 1;
-      }
-      if (c > 0) {
+        next = 'bouger';
+      } else if (next === 'bouger' && c > 0) {
+        out.push('bouger');
+        c -= 1;
+        next = 'workout';
+      } else if (m > 0) {
+        out.push('workout');
+        m -= 1;
+      } else {
         out.push('bouger');
         c -= 1;
       }
@@ -107,18 +133,29 @@ export const HomeView: React.FC<HomeViewProps> = ({
     return out.slice(0, 7);
   })();
 
-  /** Routine attribuée à un jour de musculation (rotation dans le programme actif). */
-  const routineForWorkoutDay = (dayIndex: number) => {
-    const list = programRoutines.length ? programRoutines : routines;
-    if (!list.length) return undefined;
-    const nth = weekPattern.slice(0, dayIndex + 1).filter((t) => t === 'workout').length - 1;
-    return list[((nth % list.length) + list.length) % list.length];
+  const cycleTypeFor = (dateStr: string): 'workout' | 'bouger' | 'repos' => {
+    const pos = ((daysBetween(lastActivity, dateStr) % cycle.length) + cycle.length) % cycle.length;
+    return cycle[pos];
   };
 
-  const planForDay = (dayIndex: number) => {
-    const type = weekPattern[dayIndex] || 'repos';
+  /** Routine attribuée à un jour de musculation (rotation dans le programme actif). */
+  const routineForDate = (dateStr: string) => {
+    const list = programRoutines.length ? programRoutines : routines;
+    if (!list.length) return undefined;
+    const n = daysBetween(lastActivity, dateStr);
+    let count = 0;
+    for (let k = 0; k <= n; k += 1) {
+      const d = new Date(toDate(lastActivity).getTime() + k * 86400000);
+      const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      if (cycleTypeFor(ds) === 'workout') count += 1;
+    }
+    return list[(count - 1 + list.length * 10) % list.length];
+  };
+
+  const planForDate = (dateStr: string) => {
+    const type = cycleTypeFor(dateStr);
     if (type === 'workout') {
-      const r = routineForWorkoutDay(dayIndex);
+      const r = routineForDate(dateStr);
       return { type, title: 'Musculation', subtitle: r?.name || 'Séance', routine: r };
     }
     if (type === 'bouger') {
@@ -127,7 +164,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
     return { type, title: 'Repos', subtitle: 'Récupération', routine: undefined };
   };
 
-  const todayPlan = planForDay(dowIndex);
+  const todayPlan = planForDate(todayDateStr);
 
   // Check if today has a workout logged
   const todayWorkoutSession = history.find((h) => h.dateString === todayDateStr);
@@ -160,7 +197,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
     const completedLog = history.find((h) => h.dateString === dateStr);
     const completedBouger = bougerDates.includes(dateStr);
 
-    const planInfo = planForDay(i);
+    const planInfo = planForDate(dateStr);
 
     return {
       dayShort: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'][i],
@@ -175,23 +212,26 @@ export const HomeView: React.FC<HomeViewProps> = ({
     };
   });
 
-  // Streak calculation — séances ET jours marqués « fait » comptent
+  // Streak : jours ACTIFS consécutifs (séance ou jour marqué fait).
+  // Un jour de repos PRÉVU ne casse pas la série ; une journée active manquée, oui.
+  // Aujourd'hui pas encore fait ne casse rien non plus : on part d'hier.
   const calculateStreak = (): number => {
-    const allDates = Array.from(new Set([...history.map((h) => h.dateString), ...bougerDates]));
-    if (allDates.length === 0) return 0;
-    const sortedDates = allDates.sort().reverse();
-    const today = todayDateStr;
-    const yesterday = localDateString(new Date(Date.now() - 86400000));
+    const active = new Set([...history.map((h) => h.dateString), ...bougerDates]);
+    if (!active.size) return 0;
+    const cursor = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (!active.has(todayDateStr)) cursor.setDate(cursor.getDate() - 1);
 
-    if (sortedDates[0] !== today && sortedDates[0] !== yesterday) return 0;
-
-    let streak = 1;
-    for (let i = 0; i < sortedDates.length - 1; i++) {
-      const cur = new Date(sortedDates[i]);
-      const prev = new Date(sortedDates[i + 1]);
-      const diff = Math.round((cur.getTime() - prev.getTime()) / (1000 * 3600 * 24));
-      if (diff === 1) streak++;
-      else break;
+    let streak = 0;
+    for (let guard = 0; guard < 400; guard += 1) {
+      const ds = localDateString(cursor);
+      if (active.has(ds)) {
+        streak += 1;
+      } else if (cycleTypeFor(ds) === 'repos') {
+        // repos prévu : neutre
+      } else {
+        break;
+      }
+      cursor.setDate(cursor.getDate() - 1);
     }
     return streak;
   };
@@ -647,7 +687,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         const sheetDay = weekDays.find((d) => d.dateStr === daySheet);
         const isDone = !!sheetDay?.hasCompleted;
         const isWorkoutDay = sheetDay?.planType === 'workout';
-        const routine = isWorkoutDay ? routineForWorkoutDay(weekDays.findIndex((d) => d.dateStr === daySheet)) : undefined;
+        const routine = isWorkoutDay ? routineForDate(daySheet) : undefined;
         const [y, m, d] = daySheet.split('-');
         const label = `${d}/${m}/${y}`;
         return (
