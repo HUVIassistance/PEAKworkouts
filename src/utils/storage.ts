@@ -219,7 +219,34 @@ export function getWorkoutHistory(): WorkoutSessionLog[] {
       localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify([]));
       return [];
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    // Migration 1 : purge des fausses séances de démonstration (« real-log-* »),
+    // responsables des jours cochés 14/16 octobre sans séance réelle.
+    // Migration 2 : répare les dates enregistrées en UTC (une séance de 23 h
+    // apparaissait le lendemain) en recalculant la date locale depuis endTime.
+    let dirty = false;
+    const cleaned = parsed
+      .filter((l: WorkoutSessionLog) => {
+        const fake = String(l?.id || '').startsWith('real-log-');
+        if (fake) dirty = true;
+        return !fake;
+      })
+      .map((l: WorkoutSessionLog) => {
+        if (!l?.endTime) return l;
+        const end = new Date(l.endTime);
+        const local = localDateString(end);
+        const utc = end.toISOString().split('T')[0];
+        if (l.dateString === utc && local !== utc) {
+          dirty = true;
+          return { ...l, dateString: local };
+        }
+        return l;
+      });
+
+    if (dirty) localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(cleaned));
+    return cleaned;
   } catch {
     return [];
   }
