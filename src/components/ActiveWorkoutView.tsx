@@ -9,6 +9,34 @@ import {
 } from '../types/workout.ts';
 import { ExerciseVisual } from './ExerciseVisual.tsx';
 import { soundEngine } from '../utils/audio.ts';
+
+/** Garde l'écran allumé pendant la séance (Wake Lock API, supporté par Chrome Android). */
+function useWakeLock(active: boolean) {
+  React.useEffect(() => {
+    let sentinel: any = null;
+    let cancelled = false;
+    const request = async () => {
+      try {
+        const nav: any = navigator;
+        if (!active || !nav.wakeLock || document.visibilityState !== 'visible') return;
+        sentinel = await nav.wakeLock.request('screen');
+        if (cancelled && sentinel) sentinel.release();
+      } catch {
+        // refusé (batterie faible, onglet non visible…) : sans conséquence
+      }
+    };
+    void request();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && active && !sentinel) void request();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisible);
+      try { sentinel && sentinel.release(); } catch { /* ignore */ }
+    };
+  }, [active]);
+}
 import {
   Check,
   ChevronLeft,
@@ -54,6 +82,7 @@ interface WorkoutStep {
   iconKey: ExerciseIconKey;
   setNumber: number;
   totalSetsOfExercise: number;
+  targetReps: number;
   mode: ExerciseExecutionMode;
   supersetGroup?: string;
   partnerExerciseName?: string;
@@ -71,6 +100,9 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
   onCancelWorkout,
   autoStartRest = true,
 }) => {
+  // Écran allumé pendant toute la séance (le téléphone ne se verrouille plus).
+  useWakeLock(true);
+
   // Global session timer state
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isElapsedRunning, setIsElapsedRunning] = useState(true);
@@ -134,6 +166,7 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
                   iconKey: gItem.ex.iconKey,
                   setNumber: s + 1,
                   totalSetsOfExercise: gItem.ex.sets.length,
+                  targetReps: gItem.ex.sets[s]?.targetReps ?? gItem.ex.sets[0]?.targetReps ?? 0,
                   mode: 'superset',
                   supersetGroup: sGroup,
                   partnerExerciseName: partner,
@@ -166,6 +199,7 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
           iconKey: currentEx.iconKey,
           setNumber: s + 1,
           totalSetsOfExercise: currentEx.sets.length,
+          targetReps: currentEx.sets[s]?.targetReps ?? currentEx.sets[0]?.targetReps ?? 0,
           mode: isDropSet ? 'drop_set' : 'ordinaire',
           supersetGroup: sGroup,
           recommendedRestSeconds: restSec,
@@ -201,23 +235,22 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
 
   // Rest timer countdown
   useEffect(() => {
-    let interval: any = null;
-    if (isRestMode && restSecondsLeft > 0) {
-      interval = setInterval(() => {
-        setRestSecondsLeft((prev) => {
-          if (prev <= 1) {
-            soundEngine.playRestComplete();
-            setIsRestMode(false);
-            return 0;
-          }
-          if (prev <= 4 && prev > 1) {
-            soundEngine.playTick(prev === 2 ? 880 : 700);
-          }
-          return prev - 1;
-        });
-      }, 1000);
+    if (!isRestMode) return;
+    if (restSecondsLeft <= 0) {
+      // Le repos est fini : on passe VRAIMENT à l'étape suivante.
+      // (Avant, on restait bloqué sur la série précédente.)
+      soundEngine.playRestComplete();
+      setIsRestMode(false);
+      advanceToNextStep();
+      return;
     }
-    return () => clearInterval(interval);
+    const timer = setTimeout(() => {
+      if (restSecondsLeft <= 11) {
+        soundEngine.playTick(restSecondsLeft <= 6 ? 880 : 700);
+      }
+      setRestSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearTimeout(timer);
   }, [isRestMode, restSecondsLeft]);
 
   // Advance to next step in the schedule
@@ -245,6 +278,7 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
         type: 'step',
         title: nextStep.exerciseName,
         subtitle: sub,
+        prescription: `${nextStep.totalSetsOfExercise}x${nextStep.targetReps}`,
         isDrop: nextStep.mode === 'drop_set',
       };
     }
@@ -252,6 +286,7 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
       type: 'finish',
       title: 'Dernière série de la séance !',
       subtitle: 'Prêt pour le bilan final',
+      prescription: '',
       isDrop: false,
     };
   };
@@ -424,8 +459,8 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <div>
-                <span className="text-[10px] text-[#f47b20] font-black uppercase tracking-wider block">
+              <div className="min-w-0 flex-1">
+                <span className="text-[10px] text-[#f47b20] font-black uppercase tracking-wider block truncate max-w-[38vw]">
                   {routineName}
                 </span>
                 <span className="text-xs font-bold text-slate-200">
@@ -506,15 +541,15 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
 
           {/* LARGE, CLEAR, EYE-CATCHING PROGRESSION BAR */}
           <div className="space-y-1.5 pt-0.5">
-            <div className="flex items-center justify-between text-xs font-bold">
-              <span className="text-white flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#f47b20] animate-pulse" />
-                <span>Progression :</span>
-                <span className="text-[#f47b20] font-black font-mono">
-                  Étape {currentStepIndex + 1} / {totalStepsCount} ({completedStepsCount} séries validées)
+            <div className="flex items-center justify-between text-sm font-bold gap-2">
+              <span className="text-white flex items-center gap-1.5 min-w-0">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#f47b20] animate-pulse shrink-0" />
+                <span className="truncate">
+                  Étape <span className="text-[#f47b20] font-black font-mono">{currentStepIndex + 1}</span> / {totalStepsCount}
+                  <span className="text-slate-400 font-medium"> · {completedStepsCount} validée{completedStepsCount > 1 ? 's' : ''}</span>
                 </span>
               </span>
-              <span className="font-mono text-sm text-[#f47b20] font-black bg-[#0a0f1d] px-2.5 py-0.5 rounded-lg border border-[#233556]">
+              <span className="font-mono text-base text-[#f47b20] font-black bg-[#0a0f1d] px-2.5 py-0.5 rounded-lg border border-[#233556] shrink-0">
                 {percentDone}%
               </span>
             </div>
@@ -563,12 +598,15 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
               <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-0.5">
                 À suivre immédiatement :
               </span>
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-sm font-bold text-white">{nextInfo.title}</h4>
-                  <p className="text-xs text-[#f47b20] font-medium">{nextInfo.subtitle}</p>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <h4 className="text-base font-bold text-white truncate">{nextInfo.title}</h4>
+                  <p className="text-xs text-[#f47b20] font-medium">
+                    {nextInfo.subtitle}
+                    {nextInfo.prescription ? ` · ${nextInfo.prescription}` : ''}
+                  </p>
                 </div>
-                <ArrowRight className="w-4 h-4 text-slate-500" />
+                <ArrowRight className="w-4 h-4 text-slate-500 shrink-0" />
               </div>
             </div>
 

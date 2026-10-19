@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { WorkoutSessionLog } from '../types/workout.ts';
+import { localDateString } from '../utils/storage.ts';
 import {
   Calendar,
   Clock,
@@ -55,7 +56,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
     downloadAnchor.setAttribute('href', dataStr);
     downloadAnchor.setAttribute(
       'download',
-      `peakform-historique-${new Date().toISOString().split('T')[0]}.json`
+      `peakform-historique-${localDateString()}.json`
     );
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();

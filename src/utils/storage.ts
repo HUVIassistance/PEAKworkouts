@@ -196,19 +196,28 @@ export function deleteRoutine(routineId: string): void {
   localStorage.setItem(ROUTINES_STORAGE_KEY, JSON.stringify(filtered));
 }
 
+/** Date locale au format YYYY-MM-DD (PAS UTC : une séance de 23h reste le jour même).
+ *  Utiliser partout où l'on date une séance, un log ou un export. */
+export function localDateString(date?: Date): string {
+  const d = date || new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export function getWorkoutHistory(): WorkoutSessionLog[] {
   try {
     const raw = localStorage.getItem(HISTORY_STORAGE_KEY);
     if (!raw) {
-      // Clean legacy versions from local storage
+      // Plus AUCUNE séance de démonstration : l'historique démarre vide.
+      // (Les anciennes versions seedaient de faux logs, ce qui faisait apparaître
+      // des jours « validés » dans le calendrier alors qu'aucune séance n'avait eu lieu.)
       ['peakform_history_v1', 'peakform_history_v2', 'peakform_history_v3', 'peakform_history_v4', 'peakform_history_v5'].forEach((k) => {
         try { localStorage.removeItem(k); } catch { /* ignore */ }
       });
-      const seeded = generateInitialWorkoutLogs();
-      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(seeded));
-      const initialPRs = calculatePRsFromHistory(seeded);
-      localStorage.setItem(PRS_STORAGE_KEY, JSON.stringify(initialPRs));
-      return seeded;
+      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify([]));
+      return [];
     }
     return JSON.parse(raw);
   } catch {
@@ -221,22 +230,21 @@ export function resetWorkoutHistoryToDefaults(): WorkoutSessionLog[] {
     ['peakform_history_v1', 'peakform_history_v2', 'peakform_history_v3', 'peakform_history_v4', 'peakform_history_v5'].forEach((k) => {
       try { localStorage.removeItem(k); } catch { /* ignore */ }
     });
-    const seeded = generateInitialWorkoutLogs();
-    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(seeded));
-    const initialPRs = calculatePRsFromHistory(seeded);
-    localStorage.setItem(PRS_STORAGE_KEY, JSON.stringify(initialPRs));
-    return seeded;
+    // Historique vidé — plus aucune séance de démonstration.
+    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify([]));
+    localStorage.setItem(PRS_STORAGE_KEY, JSON.stringify({}));
+    return [];
   } catch {
-    return generateInitialWorkoutLogs();
+    return [];
   }
 }
 
 export function getBougerCompletedDates(): string[] {
   try {
     const raw = localStorage.getItem(BOUGER_LOGS_KEY);
-    return raw ? JSON.parse(raw) : ['2026-10-15']; // 15 oct was Bouger day
+    return raw ? JSON.parse(raw) : [];
   } catch {
-    return ['2026-10-15'];
+    return [];
   }
 }
 

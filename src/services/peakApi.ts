@@ -25,6 +25,14 @@ const API_BASE = (import.meta as any).env?.VITE_PEAK_API || 'https://peak-api.hu
 // client) : elle ne protège pas d'un attaquant décidé, elle évite juste le bruit.
 const PEAK_KEY = (import.meta as any).env?.VITE_PEAK_KEY || 'c758bf5a07afb578fbe6aba9439d7be9';
 
+/** Ressenti de l'app -> options du select « Feeling » dans Notion (étoiles). */
+const FEELING_TO_NOTION: Record<string, string> = {
+  '🔥 Top': '⭐⭐⭐⭐⭐',
+  '💪 Bon': '⭐⭐⭐⭐',
+  '😐 Moyen': '⭐⭐⭐',
+  '🥵 Difficile': '⭐⭐',
+};
+
 // ------------------------------------------------------------------ types distants
 
 export interface RemoteExercise {
@@ -192,11 +200,12 @@ export async function syncProgram(): Promise<SyncSummary> {
       if (!ex.hasWeight) warnings.push(ex.name + ' : aucune charge dans Notion (0 kg)');
       return {
         exerciseId: def.id,
-        sets: ex.sets || 3,
-        reps: ex.reps || 10,
-        weight: ex.weightKg ?? 0,
-        weights: ex.weights && ex.weights.length ? ex.weights : undefined,
-        restSeconds: 90,
+          sets: ex.sets || 3,
+          reps: ex.reps || 10,
+          weight: ex.weightKg ?? 0,
+          weights: ex.weights && ex.weights.length ? ex.weights : undefined,
+          // Un repos de superset est plus long : la charge y est plus élevée.
+          restSeconds: ex.superset ? 120 : 90,
         supersetGroup: ex.superset || undefined,
         notes: ex.repsMax ? 'cible ' + ex.reps + '-' + ex.repsMax + ' reps' : undefined,
       };
@@ -328,6 +337,8 @@ function buildSessionPayload(log: WorkoutSessionLog) {
     setsPlanned: setsTotal,
     volumeKg: Math.round(log.totalVolumeKg || 0),
     notes: log.notes,
+    // Ressenti de fin de séance -> options du champ Notion « Feeling » (étoiles).
+    feeling: log.feeling ? FEELING_TO_NOTION[log.feeling] : undefined,
     // Rattachements Notion : le workout fait (page « Mes workouts ») et le programme.
     workoutNotionId: (log.routineId || '').startsWith('notion-') ? log.routineId!.replace(/^notion-/, '') : undefined,
     programNotionId: getSettings().notionProgramId || undefined,

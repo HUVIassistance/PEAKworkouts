@@ -88,3 +88,15 @@
     overflow-x: clip;
   }
 }
+
+/* Anti « zoom au clic » : sans ça, un double-tap sur un bouton déclenche le
+   zoom du navigateur (et l'app se retrouve dézoomée au milieu d'une série). */
+button,
+[role='button'],
+a,
+input,
+select,
+textarea,
+label {
+  touch-action: manipulation;
+}

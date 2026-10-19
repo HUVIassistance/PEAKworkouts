@@ -4,6 +4,7 @@ import {
   PersonalRecord,
   MuscleGroup,
 } from '../types/workout.ts';
+import { localDateString } from '../utils/storage.ts';
 import {
   TrendingUp,
   Trophy,
@@ -56,8 +57,8 @@ export const ProgressionView: React.FC<ProgressionViewProps> = ({
   const calculateStreak = (): number => {
     if (history.length === 0) return 0;
     const sortedDates = Array.from(new Set(history.map((h) => h.dateString))).sort().reverse();
-    const today = new Date().toISOString().split('T')[0];
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    const today = localDateString();
+    const yesterday = localDateString(new Date(Date.now() - 86400000));
 
     if (sortedDates[0] !== today && sortedDates[0] !== yesterday) {
       return 0;

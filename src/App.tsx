@@ -27,6 +27,7 @@ import {
   getSettings,
   getLastWeightForExercise,
   getNutritionPlan,
+  localDateString,
 } from './utils/storage.ts';
 import { HomeView } from './components/HomeView.tsx';
 import { RoutinesView } from './components/RoutinesView.tsx';
@@ -77,6 +78,13 @@ export default function App() {
   const [syncState, setSyncState] = useState<'idle' | 'busy' | 'ok' | 'err'>('idle');
   const [syncMsg, setSyncMsg] = useState('');
 
+  // Détection du mode « site pour ordinateur » de Chrome sur mobile
+  const [desktopMode, setDesktopMode] = useState(false);
+  useEffect(() => {
+    const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+    if (isMobile && window.innerWidth >= 720) setDesktopMode(true);
+  }, []);
+
   const handleSyncNotion = async () => {
     if (syncState === 'busy') return;
     setSyncState('busy');
@@ -121,6 +129,7 @@ export default function App() {
     const savedActive = getActiveWorkoutState();
     if (savedActive && savedActive.exercises && savedActive.exercises.length > 0) {
       setActiveRoutineName(savedActive.routineName || 'Séance en cours');
+      setActiveRoutineId(savedActive.routineId || '');
       setActiveExercises(savedActive.exercises);
       setActiveSessionStartTime(savedActive.startTime || Date.now());
     }
@@ -134,13 +143,14 @@ export default function App() {
     if (activeExercises.length > 0) {
       saveActiveWorkoutState({
         routineName: activeRoutineName,
+        routineId: activeRoutineId,
         exercises: activeExercises,
         startTime: activeSessionStartTime,
       });
     } else {
       saveActiveWorkoutState(null);
     }
-  }, [activeExercises, activeRoutineName, activeSessionStartTime]);
+  }, [activeExercises, activeRoutineName, activeRoutineId, activeSessionStartTime]);
 
   // Handle active program change
   const handleSelectActiveProgram = (programId: string) => {
@@ -302,7 +312,7 @@ export default function App() {
       exercises: completedExercises,
       totalVolumeKg: totalVolume,
       totalSetsCompleted: totalSets,
-      dateString: new Date().toISOString().split('T')[0],
+      dateString: localDateString(),
       notes: notes.trim() || undefined,
       feeling,
     };
@@ -372,6 +382,13 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#0b101d] text-slate-100 flex flex-col font-sans selection:bg-[#f47b20] selection:text-white">
+      {/* Mode « site pour ordinateur » : Chrome rend la page à ~980 px puis la
+          dézoome -> tout paraît minuscule et le double-tap zoome sans arrêt. */}
+      {desktopMode && (
+        <div className="bg-[#f47b20] text-white text-[13px] font-semibold px-4 py-2 text-center">
+          Mode bureau détecté : dans Chrome, menu ⋮ → décoche « Site pour ordinateur », puis rouvre l'app.
+        </div>
+      )}
       {/* If Active Workout Window is open, show the dedicated screen */}
       {isActiveWorkoutOpen && activeExercises.length > 0 ? (
         <ActiveWorkoutView

@@ -30,6 +30,7 @@ import {
   toggleBougerCompletedDate,
   resetWorkoutHistoryToDefaults,
   getSettings,
+  localDateString,
 } from '../utils/storage.ts';
 
 interface HomeViewProps {
@@ -79,42 +80,52 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const seanceA = programRoutines[0] || routines.find((r) => r.id === 'seance-a-push-pull-core') || routines[0];
   const seanceB = programRoutines[1] || routines.find((r) => r.id === 'seance-b-epaules-pecs-renfo') || routines[1] || routines[0];
 
-  // Specific planned athlete schedule aligned on user's exact cycle:
-  // 14 oct: Séance B (Mercredi)
-  // 15 oct: Bouger (Jeudi)
-  // 16 oct: Séance A (Vendredi)
-  // 17 oct: Bouger (Samedi)
-  // 18 oct: Séance B (Dimanche)
-  // 19 oct: Repos (Lundi)
-  // 20 oct: Bouger (Mardi)
-  // 21 oct: Séance A (Mercredi)
-  const plannedCycle: Record<string, {
-    type: 'workout' | 'bouger' | 'repos';
-    title: string;
-    subtitle: string;
-    routine?: WorkoutRoutine;
-  }> = {
-    '2026-10-12': { type: 'repos', title: 'Repos', subtitle: 'Récupération' },
-    '2026-10-13': { type: 'bouger', title: 'Bouger', subtitle: 'Cardio / sport' },
-    '2026-10-14': { type: 'workout', title: 'Séance B', subtitle: 'Épaules + pecs + renforcement', routine: seanceB },
-    '2026-10-15': { type: 'bouger', title: 'Bouger', subtitle: 'Cardio / sport', routine: undefined },
-    '2026-10-16': { type: 'workout', title: 'Séance A', subtitle: 'Push + pull + core', routine: seanceA },
-    '2026-10-17': { type: 'bouger', title: 'Bouger', subtitle: 'Cardio, sport ou endurance', routine: undefined },
-    '2026-10-18': { type: 'workout', title: 'Séance B', subtitle: 'Épaules + pecs + renforcement', routine: seanceB },
-    '2026-10-19': { type: 'repos', title: 'Repos', subtitle: 'Récupération complète', routine: undefined },
-    '2026-10-20': { type: 'bouger', title: 'Bouger', subtitle: 'Cardio / sport', routine: undefined },
-    '2026-10-21': { type: 'workout', title: 'Séance A', subtitle: 'Push + pull + core', routine: seanceA },
-    '2026-10-22': { type: 'bouger', title: 'Bouger', subtitle: 'Cardio / sport', routine: undefined },
-    '2026-10-23': { type: 'workout', title: 'Séance B', subtitle: 'Épaules + pecs + renforcement', routine: seanceB },
+
+  // --- Planning hebdomadaire piloté par Notion (champs du programme actif) --------
+  const dowIndex = now.getDay() === 0 ? 6 : now.getDay() - 1; // 0 = lundi
+  const settingsNow = getSettings();
+  const planMuscu = settingsNow.planning?.muscu ?? 3;
+  const planCardio = settingsNow.planning?.cardio ?? 3;
+  // Motif de la semaine : alternance muscu / cardio, le repos tombe en fin de semaine.
+  const weekPattern: ('workout' | 'bouger' | 'repos')[] = (() => {
+    const out: ('workout' | 'bouger' | 'repos')[] = [];
+    let m = planMuscu;
+    let c = planCardio;
+    while (m > 0 || c > 0) {
+      if (m > 0) {
+        out.push('workout');
+        m -= 1;
+      }
+      if (c > 0) {
+        out.push('bouger');
+        c -= 1;
+      }
+    }
+    while (out.length < 7) out.push('repos');
+    return out.slice(0, 7);
+  })();
+
+  /** Routine attribuée à un jour de musculation (rotation dans le programme actif). */
+  const routineForWorkoutDay = (dayIndex: number) => {
+    const list = programRoutines.length ? programRoutines : routines;
+    if (!list.length) return undefined;
+    const nth = weekPattern.slice(0, dayIndex + 1).filter((t) => t === 'workout').length - 1;
+    return list[((nth % list.length) + list.length) % list.length];
   };
 
-  // Determine today's plan
-  const todayPlan = plannedCycle[todayDateStr] || {
-    type: now.getDay() === 1 ? 'repos' : now.getDay() % 2 === 0 ? 'workout' : 'bouger',
-    title: now.getDay() === 1 ? 'Repos' : now.getDay() % 2 === 0 ? 'Séance B' : 'Bouger',
-    subtitle: now.getDay() === 1 ? 'Récupération' : now.getDay() % 2 === 0 ? 'Musculation' : 'Cardio / sport',
-    routine: seanceB,
+  const planForDay = (dayIndex: number) => {
+    const type = weekPattern[dayIndex] || 'repos';
+    if (type === 'workout') {
+      const r = routineForWorkoutDay(dayIndex);
+      return { type, title: 'Musculation', subtitle: r?.name || 'Séance', routine: r };
+    }
+    if (type === 'bouger') {
+      return { type, title: 'Bouger', subtitle: 'Cardio / sport', routine: undefined };
+    }
+    return { type, title: 'Repos', subtitle: 'Récupération', routine: undefined };
   };
+
+  const todayPlan = planForDay(dowIndex);
 
   // Check if today has a workout logged
   const todayWorkoutSession = history.find((h) => h.dateString === todayDateStr);
@@ -147,11 +158,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
     const completedLog = history.find((h) => h.dateString === dateStr);
     const completedBouger = bougerDates.includes(dateStr);
 
-    const planInfo = plannedCycle[dateStr] || {
-      type: i === 6 ? 'repos' : i % 2 === 0 ? 'workout' : 'bouger',
-      title: i === 6 ? 'Repos' : i % 2 === 0 ? 'Séance' : 'Bouger',
-      subtitle: i === 6 ? 'Récupération' : i % 2 === 0 ? 'Musculation' : 'Cardio',
-    };
+    const planInfo = planForDay(i);
 
     return {
       dayShort: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'][i],
@@ -171,7 +178,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
     if (history.length === 0) return 0;
     const sortedDates = Array.from(new Set(history.map((h) => h.dateString))).sort().reverse();
     const today = todayDateStr;
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    const yesterday = localDateString(new Date(Date.now() - 86400000));
 
     if (sortedDates[0] !== today && sortedDates[0] !== yesterday) return 0;
 
@@ -619,19 +626,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
-          <button
-            type="button"
-            onClick={() => {
-              resetWorkoutHistoryToDefaults();
-              if (onRefreshHistory) onRefreshHistory();
-            }}
-            className="px-2.5 py-1.5 rounded-xl bg-[#0d1424] hover:bg-[#16223b] border border-[#233556] text-[10px] font-semibold text-slate-400 hover:text-white transition flex items-center gap-1"
-            title="Synchroniser strictement avec vos séances réelles des 14 et 16 octobre"
-          >
-            <RotateCcw className="w-3 h-3 text-[#f47b20]" />
-            <span>Séances réelles (14 & 16 oct)</span>
-          </button>
-
           <button
             type="button"
             onClick={() => onNavigateTab('workouts')}
