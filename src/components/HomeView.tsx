@@ -32,6 +32,7 @@ import {
   resetWorkoutHistoryToDefaults,
   getSettings,
   localDateString,
+  trainingDateString,
 } from '../utils/storage.ts';
 
 interface HomeViewProps {
@@ -40,7 +41,7 @@ interface HomeViewProps {
   history: WorkoutSessionLog[];
   nutritionPlan: DailyNutritionPlan;
   personalRecords: Record<string, PersonalRecord>;
-  onStartRoutine: (routine: WorkoutRoutine) => void;
+  onStartRoutine: (routine: WorkoutRoutine, dateStr?: string) => void;
   onNavigateTab: (tab: 'workouts' | 'nutrition' | 'progression' | 'history' | 'exercises') => void;
   onRefreshHistory?: () => void;
 }
@@ -69,13 +70,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
     'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'
   ];
 
-  // Accurate local date representation
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const dayNum = String(now.getDate()).padStart(2, '0');
-  const todayDateStr = `${year}-${month}-${dayNum}`;
+  // Jour d'entraînement : bascule à 4 h du matin (une séance à 00 h 30 reste
+  // rattachée à la veille), pour coller à un usage nocturne.
+  const todayDateStr = trainingDateString(now);
+  const todayRef = new Date(todayDateStr + 'T12:00:00');
 
-  const formattedDate = `${dayNames[now.getDay()]} ${now.getDate()} ${monthNames[now.getMonth()]} ${now.getFullYear()}`;
+  const formattedDate = `${dayNames[todayRef.getDay()]} ${todayRef.getDate()} ${monthNames[todayRef.getMonth()]} ${todayRef.getFullYear()}`;
 
   // Workouts belonging to active program (IDs Notion ou par défaut)
   const programRoutines = routines.filter((r) => r.programId === activeProgram.id);
@@ -180,9 +180,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
   };
 
   // Calendar for current week (Lun 12 oct to Dim 18 oct)
-  const currentDayOfWeek = now.getDay() === 0 ? 7 : now.getDay(); // 1 = Lun, 7 = Dim
-  const mondayDate = new Date(now);
-  mondayDate.setDate(now.getDate() - currentDayOfWeek + 1);
+  const currentDayOfWeek = todayRef.getDay() === 0 ? 7 : todayRef.getDay(); // 1 = Lun, 7 = Dim
+  const mondayDate = new Date(todayRef);
+  mondayDate.setDate(todayRef.getDate() - currentDayOfWeek + 1);
 
   const weekDays = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(mondayDate);
@@ -331,7 +331,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
               <button
                 type="button"
-                onClick={() => onStartRoutine(seanceB)}
+                onClick={() => onStartRoutine(seanceB, todayDateStr)}
                 className="px-3 py-2 rounded-2xl bg-[#0d1424] hover:bg-[#16223b] border border-[#233556] text-[11px] font-semibold text-slate-400 hover:text-white transition flex items-center justify-center gap-1"
                 title="Faire la Séance B en avance si vous préférez soulever de la fonte"
               >
@@ -410,7 +410,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <div className="shrink-0">
               <button
                 type="button"
-                onClick={() => onStartRoutine(seanceA)}
+                onClick={() => onStartRoutine(seanceA, todayDateStr)}
                 className="px-3.5 py-2 rounded-2xl bg-[#0d1424] hover:bg-[#16223b] border border-[#233556] text-xs font-semibold text-slate-400 hover:text-white transition flex items-center gap-1"
               >
                 <span>Lancer Séance A quand même</span>
@@ -461,7 +461,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 <div className="flex items-center gap-2 shrink-0 pt-2 sm:pt-0">
                   <button
                     type="button"
-                    onClick={() => onStartRoutine(seanceB)}
+                    onClick={() => onStartRoutine(seanceB, todayDateStr)}
                     className="px-4 py-2.5 rounded-2xl bg-[#16223b] hover:bg-[#233556] border border-[#233556] hover:border-[#f47b20] text-xs font-bold text-white transition flex items-center gap-1.5"
                   >
                     <span>Autre séance en avance</span>
@@ -507,7 +507,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 <div className="shrink-0 pt-2 sm:pt-0">
                   <button
                     type="button"
-                    onClick={() => onStartRoutine(todayPlan.routine || seanceA)}
+                    onClick={() => onStartRoutine(todayPlan.routine || seanceA, todayDateStr)}
                     className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-gradient-to-r from-[#f47b20] to-[#ff9f4d] hover:from-[#e06810] hover:to-[#f47b20] text-white font-black text-sm shadow-lg shadow-[#f47b20]/25 transition flex items-center justify-center gap-2 group-hover:scale-105 transform duration-150"
                   >
                     <Play className="w-4 h-4 fill-current" />
@@ -726,7 +726,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   type="button"
                   onClick={() => {
                     setDaySheet(null);
-                    onStartRoutine(routine);
+                    onStartRoutine(routine, daySheet || todayDateStr);
                   }}
                   className="w-full py-3 rounded-xl font-bold text-sm bg-[#16223b] hover:bg-[#233556] border border-[#233556] text-white flex items-center justify-center gap-2"
                 >

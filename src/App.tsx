@@ -28,6 +28,7 @@ import {
   getLastWeightForExercise,
   getNutritionPlan,
   localDateString,
+  trainingDateString,
 } from './utils/storage.ts';
 import { HomeView } from './components/HomeView.tsx';
 import { RoutinesView } from './components/RoutinesView.tsx';
@@ -70,6 +71,9 @@ export default function App() {
   const [activeRoutineId, setActiveRoutineId] = useState<string>('');
   const [activeExercises, setActiveExercises] = useState<ActiveExerciseItem[]>([]);
   const [activeSessionStartTime, setActiveSessionStartTime] = useState<number>(0);
+  // Jour auquel la séance est rattachée : figé au LANCEMENT (pas à la fin),
+  // pour qu'une séance finie après minuit reste sur la journée d'origine.
+  const [activeSessionDate, setActiveSessionDate] = useState<string>('');
 
   // Modals
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
@@ -132,6 +136,7 @@ export default function App() {
       setActiveRoutineId(savedActive.routineId || '');
       setActiveExercises(savedActive.exercises);
       setActiveSessionStartTime(savedActive.startTime || Date.now());
+      setActiveSessionDate(savedActive.sessionDate || trainingDateString(new Date(savedActive.startTime || Date.now())));
     }
 
     const settings = getSettings();
@@ -146,11 +151,12 @@ export default function App() {
         routineId: activeRoutineId,
         exercises: activeExercises,
         startTime: activeSessionStartTime,
+        sessionDate: activeSessionDate,
       });
     } else {
       saveActiveWorkoutState(null);
     }
-  }, [activeExercises, activeRoutineName, activeRoutineId, activeSessionStartTime]);
+  }, [activeExercises, activeRoutineName, activeRoutineId, activeSessionStartTime, activeSessionDate]);
 
   // Handle active program change
   const handleSelectActiveProgram = (programId: string) => {
@@ -169,7 +175,10 @@ export default function App() {
   };
 
   // Launch a workout routine (auto-inheriting the user's last used weight for each exercise)
-  const handleStartRoutine = (routine: WorkoutRoutine) => {
+  const handleStartRoutine = (routine: WorkoutRoutine, dateStr?: string) => {
+    const launchedAt = Date.now();
+    setActiveSessionDate(dateStr || trainingDateString(new Date(launchedAt)));
+    setActiveSessionStartTime(launchedAt);
     const exerciseItems: ActiveExerciseItem[] = routine.exercises.map((item, idx) => {
       const def = exercises.find((e) => e.id === item.exerciseId);
       const exName = def?.name || 'Exercice';
@@ -210,12 +219,14 @@ export default function App() {
     setActiveRoutineName(routine.name);
     setActiveRoutineId(routine.id);
     setActiveExercises(exerciseItems);
-    setActiveSessionStartTime(Date.now());
     setIsActiveWorkoutOpen(true);
   };
 
   // Launch single exercise workout from library
   const handleStartSingleExercise = (exDef: ExerciseDefinition) => {
+    const singleLaunchedAt = Date.now();
+    setActiveSessionDate(trainingDateString(new Date(singleLaunchedAt)));
+    setActiveSessionStartTime(singleLaunchedAt);
     const lastWeight = getLastWeightForExercise(exDef.name, exDef.id);
     const initialWeight =
       lastWeight !== null && lastWeight !== undefined ? lastWeight : exDef.defaultWeight;
@@ -245,7 +256,6 @@ export default function App() {
 
     setActiveRoutineName(`Session : ${exDef.name}`);
     setActiveExercises([activeItem]);
-    setActiveSessionStartTime(Date.now());
     setIsActiveWorkoutOpen(true);
   };
 
@@ -312,7 +322,7 @@ export default function App() {
       exercises: completedExercises,
       totalVolumeKg: totalVolume,
       totalSetsCompleted: totalSets,
-      dateString: localDateString(),
+      dateString: activeSessionDate || trainingDateString(new Date(activeSessionStartTime || now)),
       notes: notes.trim() || undefined,
       feeling,
     };
@@ -349,6 +359,7 @@ export default function App() {
     setActiveExercises([]);
     setActiveRoutineName('');
     setActiveRoutineId('');
+    setActiveSessionDate('');
     saveActiveWorkoutState(null);
 
     setIsSummaryModalOpen(false);

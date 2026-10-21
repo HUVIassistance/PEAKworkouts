@@ -224,6 +224,19 @@ export function localDateString(date?: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+/** Jour d'entraînement : la journée « bascule » à 4 h du matin, pas à minuit.
+ *  Une séance lancée à 23 h 45 — ou à 00 h 30 — appartient à la veille, ce qui
+ *  correspond à l'usage réel (on ne change pas de journée en pleine séance). */
+export const TRAINING_DAY_START_HOUR = 4;
+
+export function trainingDateString(date?: Date): string {
+  const d = date ? new Date(date.getTime()) : new Date();
+  if (d.getHours() < TRAINING_DAY_START_HOUR) {
+    d.setDate(d.getDate() - 1);
+  }
+  return localDateString(d);
+}
+
 export function getWorkoutHistory(): WorkoutSessionLog[] {
   try {
     const raw = localStorage.getItem(HISTORY_STORAGE_KEY);
@@ -254,6 +267,14 @@ export function getWorkoutHistory(): WorkoutSessionLog[] {
       .map((l: WorkoutSessionLog) => {
         if (!l?.endTime) return l;
         const end = new Date(l.endTime);
+        // Migration 3 : la séance appartient au jour où elle a été LANCÉE.
+        // Une séance 23 h 45 -> 00 h 41 ne doit pas basculer sur le lendemain.
+        const start = l.startTime ? new Date(l.startTime) : null;
+        const launchDay = start && !isNaN(start.getTime()) ? trainingDateString(start) : null;
+        if (launchDay && l.dateString !== launchDay) {
+          dirty = true;
+          return { ...l, dateString: launchDay };
+        }
         const local = localDateString(end);
         const utc = end.toISOString().split('T')[0];
         if (l.dateString === utc && local !== utc) {
