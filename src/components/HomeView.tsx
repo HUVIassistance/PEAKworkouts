@@ -212,13 +212,16 @@ export const HomeView: React.FC<HomeViewProps> = ({
     };
   });
 
-  // Streak : jours ACTIFS consécutifs (séance ou jour marqué fait).
-  // Un jour de repos PRÉVU ne casse pas la série ; une journée active manquée, oui.
-  // Aujourd'hui pas encore fait ne casse rien non plus : on part d'hier.
+  // Streak : jours consécutifs SANS journée manquée.
+  //  - séance enregistrée ou jour marqué « fait » -> +1
+  //  - repos PRÉVU au programme -> +1 aussi : il fait partie de la série
+  //    (sinon 18 + repos 19 + 20 n'affichait que 2 au lieu de 3)
+  //  - journée active non faite -> la série s'arrête
+  //  - « rien fait aujourd'hui » ne casse rien : on part d'hier
   const calculateStreak = (): number => {
     const active = new Set([...history.map((h) => h.dateString), ...bougerDates]);
     if (!active.size) return 0;
-    const cursor = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const cursor = new Date(todayDateStr + 'T12:00:00');
     if (!active.has(todayDateStr)) cursor.setDate(cursor.getDate() - 1);
 
     let streak = 0;
@@ -227,7 +230,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
       if (active.has(ds)) {
         streak += 1;
       } else if (cycleTypeFor(ds) === 'repos') {
-        // repos prévu : neutre
+        streak += 1; // repos prévu : la série continue et compte
       } else {
         break;
       }
