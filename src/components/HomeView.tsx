@@ -212,36 +212,30 @@ export const HomeView: React.FC<HomeViewProps> = ({
     };
   });
 
-  // Streak : jours consécutifs SANS journée manquée.
-  //  - séance enregistrée ou jour marqué « fait » -> +1
-  //  - repos PRÉVU au programme -> +1 aussi : il fait partie de la série
-  //    (sinon 18 + repos 19 + 20 n'affichait que 2 au lieu de 3)
-  //  - journée active non faite -> la série s'arrête
-  //  - « rien fait aujourd'hui » ne casse rien : on part d'hier
+  // Streak : jours de SPORT consécutifs.
+  //  - séance de musculation OU jour de sport marqué « fait » (cardio, marche…) -> +1
+  //  - repos PRÉVU au programme -> neutre : il ne compte pas, mais ne casse rien
+  //  - journée de sport non faite -> la série s'arrête
+  //  - « rien encore aujourd'hui » ne casse rien : on part d'hier
   const calculateStreak = (): number => {
     const active = new Set([...history.map((h) => h.dateString), ...bougerDates]);
     if (!active.size) return 0;
     const cursor = new Date(todayDateStr + 'T12:00:00');
     if (!active.has(todayDateStr)) cursor.setDate(cursor.getDate() - 1);
 
-    // On collecte les jours consécutifs (du plus récent au plus ancien), puis on
-    // retire les repos en fin de série : un repos ne compte que s'il est encadré
-    // par de l'activité (sinon une seule séance afficherait déjà « 2 »).
-    const run: { ds: string; isRest: boolean }[] = [];
+    let streak = 0;
     for (let guard = 0; guard < 400; guard += 1) {
       const ds = localDateString(cursor);
       if (active.has(ds)) {
-        run.push({ ds, isRest: false });
+        streak += 1;
       } else if (cycleTypeFor(ds) === 'repos') {
-        run.push({ ds, isRest: true });
+        // neutre : on traverse le repos sans le compter
       } else {
         break;
       }
       cursor.setDate(cursor.getDate() - 1);
     }
-    let n = run.length;
-    while (n > 0 && run[n - 1].isRest) n -= 1;
-    return n;
+    return streak;
   };
 
   const streak = calculateStreak();
