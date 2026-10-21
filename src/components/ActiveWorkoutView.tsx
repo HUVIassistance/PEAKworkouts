@@ -139,43 +139,52 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
         }
 
         if (groupExercises.length > 1) {
-          // It's a genuine alternating superset!
-          // Alternate sets: Ex1 Set1 -> Ex2 Set1 -> Ex1 Set2 -> Ex2 Set2...
+          // Superset alterné : Ex1 S1 -> Ex2 S1 -> Ex1 S2 -> Ex2 S2…
+          // Si les membres n'ont pas le même nombre de séries (ex. 3 vs 4), on
+          // alterne sur le PLUS PETIT commun, sinon le surplus sort en séries
+          // collées à la fin (le fameux « seated -> seated »).
           const maxSets = Math.max(...groupExercises.map((g) => g.ex.sets.length));
+          const rounds = Math.min(...groupExercises.map((g) => g.ex.sets.length));
 
-          for (let s = 0; s < maxSets; s++) {
-            groupExercises.forEach((gItem, gIdx) => {
-              if (s < gItem.ex.sets.length) {
-                const isLastInRound = gIdx === groupExercises.length - 1;
-                const partner = groupExercises.find((_, pIdx) => pIdx !== gIdx)?.ex.name;
+          const pushStep = (gItem: { ex: ActiveExerciseItem; originalIndex: number }, s: number, inSuperset: boolean) => {
+            const gIdx = groupExercises.findIndex((g) => g.originalIndex === gItem.originalIndex);
+            const isLastInRound = gIdx === groupExercises.length - 1;
+            const partner = groupExercises.find((_, pIdx) => pIdx !== gIdx)?.ex.name;
+            const restSec = inSuperset ? (isLastInRound ? gItem.ex.restSeconds || 75 : 30) : gItem.ex.restSeconds || 75;
 
-                // Rest: after the round ends, full rest. Between partners, short transition (20-30s).
-                const restSec = isLastInRound
-                  ? gItem.ex.restSeconds || 75
-                  : 30;
+            list.push({
+              stepId: inSuperset ? `step-ss-${gItem.originalIndex}-${s}` : `step-ex-${gItem.originalIndex}-${s}`,
+              exerciseIndex: gItem.originalIndex,
+              setIndex: s,
+              exerciseName: gItem.ex.name,
+              category: gItem.ex.category,
+              targetMuscle: gItem.ex.targetMuscle,
+              description: gItem.ex.description,
+              tips: gItem.ex.tips,
+              iconKey: gItem.ex.iconKey,
+              setNumber: s + 1,
+              totalSetsOfExercise: gItem.ex.sets.length,
+              targetReps: gItem.ex.sets[s]?.targetReps ?? gItem.ex.sets[0]?.targetReps ?? 0,
+              mode: inSuperset ? 'superset' : 'ordinaire',
+              supersetGroup: inSuperset ? sGroup : undefined,
+              partnerExerciseName: inSuperset ? partner : undefined,
+              recommendedRestSeconds: restSec,
+              isLastInSupersetRound: inSuperset ? isLastInRound : true,
+            });
+          };
 
-                list.push({
-                  stepId: `step-ss-${gItem.originalIndex}-${s}`,
-                  exerciseIndex: gItem.originalIndex,
-                  setIndex: s,
-                  exerciseName: gItem.ex.name,
-                  category: gItem.ex.category,
-                  targetMuscle: gItem.ex.targetMuscle,
-                  description: gItem.ex.description,
-                  tips: gItem.ex.tips,
-                  iconKey: gItem.ex.iconKey,
-                  setNumber: s + 1,
-                  totalSetsOfExercise: gItem.ex.sets.length,
-                  targetReps: gItem.ex.sets[s]?.targetReps ?? gItem.ex.sets[0]?.targetReps ?? 0,
-                  mode: 'superset',
-                  supersetGroup: sGroup,
-                  partnerExerciseName: partner,
-                  recommendedRestSeconds: restSec,
-                  isLastInSupersetRound: isLastInRound,
-                });
-              }
+          // 1) Les tours réellement alternés (durée = série la plus courte du groupe)
+          for (let s = 0; s < rounds; s++) {
+            groupExercises.forEach((gItem) => pushStep(gItem, s, true));
+          }
+
+          // 2) Le surplus éventuel, hors superset et à la suite (série de rappel)
+          for (let s = rounds; s < maxSets; s++) {
+            groupExercises.forEach((gItem) => {
+              if (s < gItem.ex.sets.length) pushStep(gItem, s, false);
             });
           }
+
           i = j;
           continue;
         }

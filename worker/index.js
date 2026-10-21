@@ -373,10 +373,42 @@ async function resolveProgramForWorkout(env, workoutId, fallback) {
   }
 }
 
+/** Retrouve un workout par son NOM dans le programme actif (filet de sécurité
+ *  quand l'app n'a pas transmis l'ID Notion). */
+async function resolveWorkoutByName(env, name) {
+  const target = norm(name);
+  if (!target) return null;
+  try {
+    const program = await buildProgram(env);
+    const workouts = (program.program && program.program.workouts) || [];
+    if (!workouts.length) return null;
+    const programId = program.program.notionId;
+    let hit = workouts.find((w) => norm(w.name) === target);
+    if (!hit) hit = workouts.find((w) => norm(w.name).includes(target) || target.includes(norm(w.name)));
+    if (!hit) return null;
+    return { workoutId: hit.notionId, programId: programId };
+  } catch (e) {
+    return null;
+  }
+}
+
 async function pushSession(env, body) {
   const sessionId = String(body.sessionId || '').trim();
   if (!sessionId) throw new Error('sessionId requis');
   if (!body.title) throw new Error('title requis');
+
+  // Rattachements : si l'app n'a pas fourni l'ID du workout (routine locale,
+  // séance reprise après rechargement…), on le retrouve par son NOM dans le
+  // programme actif. Sans ça la page existe mais reste orpheline dans Notion.
+  let workoutId = body.workoutNotionId;
+  let programIdHint = body.programNotionId;
+  if (!workoutId) {
+    const hit = await resolveWorkoutByName(env, body.workoutName || body.title);
+    if (hit) {
+      workoutId = hit.workoutId;
+      programIdHint = programIdHint || hit.programId;
+    }
+  }
 
   const existing = await notion(env, '/v1/databases/' + DB_SESSIONS + '/query', {
     page_size: 1,
@@ -399,8 +431,8 @@ async function pushSession(env, body) {
   if (body.notes) props.Notes = { rich_text: [{ text: { content: String(body.notes).slice(0, 1900) } }] };
   if (body.feeling) props.Feeling = { select: { name: body.feeling } };
   // Rattachements : la séance pointe le workout fait ET le programme dont il vient.
-  if (body.workoutNotionId) props['Workout lié'] = { relation: [{ id: body.workoutNotionId }] };
-  const programId = await resolveProgramForWorkout(env, body.workoutNotionId, body.programNotionId);
+  if (workoutId) props['Workout lié'] = { relation: [{ id: workoutId }] };
+  const programId = await resolveProgramForWorkout(env, workoutId, programIdHint);
   if (programId) props['Programme lié'] = { relation: [{ id: programId }] };
 
   const children = [{ object: 'block', type: 'heading_2', heading_2: { rich_text: [{ text: { content: 'Exercices réalisés' } }] } }];
@@ -431,8 +463,13 @@ async function pushSession(env, body) {
 /** Réécrit la prescription d'un workout dans Notion à partir de ce qui a été
  *  réellement fait : « Push-ups 3x12-15 @ 5 kg » -> « Push-ups 4x12 @ 5/5/5/6 kg ». */
 async function promoteSession(env, body) {
-  const pageId = String(body.workoutNotionId || '').trim();
-  if (!pageId) throw new Error('workoutNotionId requis');
+  let pageId = String(body.workoutNotionId || '').trim();
+  if (!pageId) {
+    // Séance issue d'une routine locale ou reprise : on retrouve le workout par son nom.
+    const hit = await resolveWorkoutByName(env, body.workoutName || '');
+    if (!hit) throw new Error('workout introuvable dans le programme actif — synchronise, puis réessaie');
+    pageId = hit.workoutId;
+  }
   const performed = (body.exercises || []).filter((e) => (e.sets || []).length);
   if (!performed.length) throw new Error('aucune série réalisée à promouvoir');
 
