@@ -14,6 +14,7 @@ import {
   getSettings,
   saveSettings,
   setActiveProgramId,
+  removeDemoRoutines,
 } from '../utils/storage.ts';
 
 /**
@@ -237,6 +238,9 @@ export async function syncProgram(): Promise<SyncSummary> {
   saveProgram(trainingProgram);
   // Le programme importé devient le programme actif : l'app doit refléter Notion.
   setActiveProgramId(trainingProgram.id);
+  // Nettoyage : les routines de démonstration n'ont plus de raison d'être, et
+  // une séance lancée depuis elles n'aurait aucun ID Notion (page orpheline).
+  removeDemoRoutines();
 
   const settings = getSettings();
   saveSettings({

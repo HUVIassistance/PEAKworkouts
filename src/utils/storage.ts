@@ -167,15 +167,33 @@ export function getRoutines(): WorkoutRoutine[] {
       localStorage.setItem(ROUTINES_STORAGE_KEY, JSON.stringify(DEFAULT_ROUTINES));
       return DEFAULT_ROUTINES;
     }
-    const stored: WorkoutRoutine[] = JSON.parse(raw);
-    DEFAULT_ROUTINES.forEach((defR) => {
-      if (!stored.some((s) => s.id === defR.id)) {
-        stored.push(defR);
-      }
-    });
-    return stored;
+    // NE JAMAIS réinjecter les routines de démonstration : elles étaient
+    // ressuscitées à chaque chargement, ce qui laissait « Séance A/B » (sans ID
+    // Notion) en concurrence avec les séances synchronisées. Une séance lancée
+    // depuis une routine de démo ne pouvait donc pas être reliée dans Notion.
+    return JSON.parse(raw);
   } catch {
     return DEFAULT_ROUTINES;
+  }
+}
+
+/** Supprime les routines de démonstration dès qu'un programme Notion est actif.
+ *  Ce sont elles qui polluaient « Mes workouts » et permettaient de lancer une
+ *  séance sans ID Notion (donc impossible à rattacher dans Notion). */
+export function removeDemoRoutines(): number {
+  try {
+    const current = getRoutines();
+    const demoIds = DEFAULT_ROUTINES.map((d) => d.id);
+    const kept = current.filter(
+      (r) => !demoIds.includes(r.id) || String(r.programId || '').startsWith('notion-')
+    );
+    const removed = current.length - kept.length;
+    if (removed > 0) {
+      localStorage.setItem(ROUTINES_STORAGE_KEY, JSON.stringify(kept));
+    }
+    return removed;
+  } catch {
+    return 0;
   }
 }
 

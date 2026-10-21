@@ -79,8 +79,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
   // Workouts belonging to active program (IDs Notion ou par défaut)
   const programRoutines = routines.filter((r) => r.programId === activeProgram.id);
-  const seanceA = programRoutines[0] || routines.find((r) => r.id === 'seance-a-push-pull-core') || routines[0];
-  const seanceB = programRoutines[1] || routines.find((r) => r.id === 'seance-b-epaules-pecs-renfo') || routines[1] || routines[0];
+  const seanceA = programRoutines[0] || routines[0];
+  const seanceB = programRoutines[1] || routines[1] || routines[0];
 
 
   // --- Cycle d'entraînement -----------------------------------------------------
