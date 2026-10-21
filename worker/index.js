@@ -385,6 +385,28 @@ async function resolveWorkoutByName(env, name) {
     const programId = program.program.notionId;
     let hit = workouts.find((w) => norm(w.name) === target);
     if (!hit) hit = workouts.find((w) => norm(w.name).includes(target) || target.includes(norm(w.name)));
+    if (!hit) {
+      // Dernier recours : recouvrement de mots significatifs. Couvre le cas d'une
+      // routine mémorisée sous un ancien nom (« Séance A : push + pull + core »)
+      // face au workout renommé dans Notion.
+      const skip = ['les', 'des', 'avec', 'pour', 'seance', 'the'];
+      const tokens = (s) => new Set(norm(s).split(' ').filter((t) => t.length > 2 && skip.indexOf(t) === -1));
+      const T = tokens(name);
+      let best = null;
+      let bestScore = 0;
+      for (const w of workouts) {
+        const W = tokens(w.name);
+        if (!W.size || !T.size) continue;
+        let inter = 0;
+        T.forEach((t) => { if (W.has(t)) inter += 1; });
+        const score = inter / Math.min(T.size, W.size);
+        if (score > bestScore) {
+          bestScore = score;
+          best = w;
+        }
+      }
+      if (best && bestScore >= 0.7) hit = best;
+    }
     if (!hit) return null;
     return { workoutId: hit.notionId, programId: programId };
   } catch (e) {
