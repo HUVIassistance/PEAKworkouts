@@ -232,8 +232,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
   // Streak : jours de SPORT consécutifs.
   //  - séance de musculation OU jour de sport marqué « fait » (cardio, marche…) -> +1
-  //  - repos PRÉVU au programme -> neutre : il ne compte pas, mais ne casse rien
-  //  - journée de sport non faite -> la série s'arrête
+  //  - repos PRÉVU ou jour cardio NON fait -> neutre : ni compté, ni cassant
+  //  - séance de MUSCULATION prévue et non faite -> la série s'arrête
   //  - « rien encore aujourd'hui » ne casse rien : on part d'hier
   const calculateStreak = (): number => {
     const active = new Set([...history.map((h) => h.dateString), ...bougerDates]);
@@ -244,12 +244,13 @@ export const HomeView: React.FC<HomeViewProps> = ({
     let streak = 0;
     for (let guard = 0; guard < 400; guard += 1) {
       const ds = localDateString(cursor);
+      const type = cycleTypeFor(ds);
       if (active.has(ds)) {
         streak += 1;
-      } else if (cycleTypeFor(ds) === 'repos') {
-        // neutre : on traverse le repos sans le compter
+      } else if (type === 'repos' || type === 'bouger') {
+        // neutre : on traverse sans compter (un cardio manqué ne casse pas la série)
       } else {
-        break;
+        break; // séance de musculation prévue et non faite
       }
       cursor.setDate(cursor.getDate() - 1);
     }
