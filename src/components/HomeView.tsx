@@ -99,12 +99,12 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const daysBetween = (a: string, b: string) =>
     Math.round((toDate(b).getTime() - toDate(a).getTime()) / 86400000);
 
-  const activityDates = Array.from(
-    new Set([...history.map((h) => h.dateString), ...bougerDates])
-  ).sort();
-  const lastActivity = activityDates.length ? activityDates[activityDates.length - 1] : todayDateStr;
-  const lastWasWorkout = history.some((h) => h.dateString === lastActivity);
-  const anchorType: 'workout' | 'bouger' = lastWasWorkout ? 'workout' : 'bouger';
+  // Le cycle est ancré sur la DERNIÈRE SÉANCE DE MUSCULATION, pas sur le dernier
+  // jour d'activité : marquer un jour de cardio ne doit pas décaler la rotation
+  // des séances (A -> B -> A), sinon on rejoue toujours la même.
+  const workoutDates = Array.from(new Set(history.map((h) => h.dateString))).sort();
+  const lastWorkout = workoutDates.length ? workoutDates[workoutDates.length - 1] : todayDateStr;
+  const anchorType: 'workout' | 'bouger' = 'workout';
 
   // Cycle complet : alternance à partir du type de l'ancre, repos en fin de cycle.
   const cycle: ('workout' | 'bouger' | 'repos')[] = (() => {
@@ -134,22 +134,40 @@ export const HomeView: React.FC<HomeViewProps> = ({
   })();
 
   const cycleTypeFor = (dateStr: string): 'workout' | 'bouger' | 'repos' => {
-    const pos = ((daysBetween(lastActivity, dateStr) % cycle.length) + cycle.length) % cycle.length;
+    const pos = ((daysBetween(lastWorkout, dateStr) % cycle.length) + cycle.length) % cycle.length;
     return cycle[pos];
   };
 
-  /** Routine attribuée à un jour de musculation (rotation dans le programme actif). */
+  const dayKey = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  /** Routine attribuée à un jour de musculation : on repart de la dernière
+   *  séance réellement faite et on avance d'une routine par jour de musculation. */
   const routineForDate = (dateStr: string) => {
     const list = programRoutines.length ? programRoutines : routines;
     if (!list.length) return undefined;
-    const n = daysBetween(lastActivity, dateStr);
-    let count = 0;
-    for (let k = 0; k <= n; k += 1) {
-      const d = new Date(toDate(lastActivity).getTime() + k * 86400000);
-      const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      if (cycleTypeFor(ds) === 'workout') count += 1;
+    const normName = (s?: string) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+    let lastIdx = -1;
+    let lastDate = '';
+    for (let i = history.length - 1; i >= 0 && lastIdx < 0; i -= 1) {
+      const h = history[i];
+      const idx = list.findIndex(
+        (r) => r.id === h.routineId || (!!h.routineName && normName(r.name) === normName(h.routineName))
+      );
+      if (idx >= 0) {
+        lastIdx = idx;
+        lastDate = h.dateString;
+      }
     }
-    return list[(count - 1 + list.length * 10) % list.length];
+    if (lastIdx < 0) return list[0];
+
+    let steps = 0;
+    const span = lastDate ? daysBetween(lastDate, dateStr) : 0;
+    for (let k = 1; k <= span; k += 1) {
+      if (cycleTypeFor(dayKey(new Date(toDate(lastDate).getTime() + k * 86400000))) === 'workout') steps += 1;
+    }
+    return list[(lastIdx + steps) % list.length];
   };
 
   const planForDate = (dateStr: string) => {

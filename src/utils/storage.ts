@@ -224,17 +224,12 @@ export function localDateString(date?: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-/** Jour d'entraînement : la journée « bascule » à 4 h du matin, pas à minuit.
- *  Une séance lancée à 23 h 45 — ou à 00 h 30 — appartient à la veille, ce qui
- *  correspond à l'usage réel (on ne change pas de journée en pleine séance). */
-export const TRAINING_DAY_START_HOUR = 4;
-
+/** Jour d'entraînement = jour civil du LANCEMENT de la séance.
+ *  Pas de bascule à 4 h : à 00 h 30, on est déjà le lendemain (comportement
+ *  attendu). Une séance lancée à 23 h 45 reste, elle, sur la journée en cours
+ *  parce que la date est figée au démarrage, pas à la clôture. */
 export function trainingDateString(date?: Date): string {
-  const d = date ? new Date(date.getTime()) : new Date();
-  if (d.getHours() < TRAINING_DAY_START_HOUR) {
-    d.setDate(d.getDate() - 1);
-  }
-  return localDateString(d);
+  return localDateString(date);
 }
 
 export function getWorkoutHistory(): WorkoutSessionLog[] {
