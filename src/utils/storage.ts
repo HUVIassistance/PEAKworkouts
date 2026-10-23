@@ -224,12 +224,17 @@ export function localDateString(date?: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-/** Jour d'entraînement = jour civil du LANCEMENT de la séance.
- *  Pas de bascule à 4 h : à 00 h 30, on est déjà le lendemain (comportement
- *  attendu). Une séance lancée à 23 h 45 reste, elle, sur la journée en cours
- *  parce que la date est figée au démarrage, pas à la clôture. */
+/** Jour d'entraînement : la journée bascule à 2 h 30 du matin.
+ *  À 00 h 30 (ou 2 h), on est encore la veille : une séance lancée la nuit
+ *  s'enregistre sur la journée qu'on vient de vivre, pas sur le lendemain.
+ *  La date est de toute façon figée au LANCEMENT, donc une séance commencée
+ *  à 23 h 45 et finie à 00 h 41 reste sur sa journée de départ. */
+export const TRAINING_DAY_ROLLOVER_MINUTES = 150; // 2 h 30
+
 export function trainingDateString(date?: Date): string {
-  return localDateString(date);
+  const d = date ? new Date(date.getTime()) : new Date();
+  d.setMinutes(d.getMinutes() - TRAINING_DAY_ROLLOVER_MINUTES);
+  return localDateString(d);
 }
 
 export function getWorkoutHistory(): WorkoutSessionLog[] {
