@@ -364,6 +364,32 @@ export function getLastWeightForExercise(exerciseName: string, exerciseId?: stri
   return null;
 }
 
+export interface PreviousSetPerformance {
+  weight: number;
+  reps: number;
+}
+
+/** Ce qui a été RÉELLEMENT fait à la dernière séance pour cet exercice
+ *  (charge et reps de chaque série validée). Sert à pré-remplir la prochaine
+ *  séance : l'app « retient » ce que tu as soulevé, sans toucher à la cible. */
+export function getLastPerformanceForExercise(exerciseName: string, exerciseId?: string): PreviousSetPerformance[] {
+  const history = getWorkoutHistory();
+  const searchName = (exerciseName || '').toLowerCase().trim();
+  for (const session of history) {
+    const foundEx = (session.exercises || []).find((e) => {
+      const eName = (e.exerciseName || '').toLowerCase().trim();
+      return eName === searchName || (exerciseId && eName.includes(exerciseId.toLowerCase()));
+    });
+    if (foundEx) {
+      const done = (foundEx.sets || []).filter((s) => s.completed);
+      if (done.length) {
+        return done.map((s) => ({ weight: Number(s.weight) || 0, reps: Number(s.reps) || 0 }));
+      }
+    }
+  }
+  return [];
+}
+
 export function getPersonalRecords(): Record<string, PersonalRecord> {
   try {
     const raw = localStorage.getItem(PRS_STORAGE_KEY);

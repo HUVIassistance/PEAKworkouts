@@ -26,6 +26,7 @@ import {
   getActiveWorkoutState,
   getSettings,
   getLastWeightForExercise,
+  getLastPerformanceForExercise,
   getNutritionPlan,
   localDateString,
   trainingDateString,
@@ -183,22 +184,29 @@ export default function App() {
       const def = exercises.find((e) => e.id === item.exerciseId);
       const exName = def?.name || 'Exercice';
 
-      // Check if user has a previously recorded weight for this exercise
+      // Pré-remplissage : on repart de ce qui a été RÉELLEMENT fait la dernière
+      // fois (charge + reps par série). La cible (`targetReps`) reste celle du
+      // programme : elle n'est mise à jour que via le bouton « mettre à jour Notion ».
+      const prevSets = getLastPerformanceForExercise(exName, item.exerciseId);
       const lastWeight = getLastWeightForExercise(exName, item.exerciseId);
       const initialWeight =
         lastWeight !== null && lastWeight !== undefined
           ? lastWeight
           : item.weight || def?.defaultWeight || 0;
 
-      const sets: WorkoutSet[] = Array.from({ length: item.sets }, (_, sIdx) => ({
-        id: `set-${idx}-${sIdx}-${Date.now()}`,
-        setNumber: sIdx + 1,
-        targetReps: item.reps,
-        // Charge prescrite pour CETTE série si Notion en donne une par série
-        weight: item.weights?.[sIdx] ?? initialWeight,
-        reps: item.reps,
-        completed: false,
-      }));
+      const sets: WorkoutSet[] = Array.from({ length: item.sets }, (_, sIdx) => {
+        const prev = prevSets[sIdx];
+        return {
+          id: `set-${idx}-${sIdx}-${Date.now()}`,
+          setNumber: sIdx + 1,
+          targetReps: item.reps,
+          // Charge de la dernière fois pour CETTE série, sinon la prescription
+          weight: prev && prev.weight > 0 ? prev.weight : item.weights?.[sIdx] ?? initialWeight,
+          // Reps de la dernière fois, sinon la prescription
+          reps: prev && prev.reps > 0 ? prev.reps : item.reps,
+          completed: false,
+        };
+      });
 
       return {
         id: `active-ex-${idx}-${Date.now()}`,
