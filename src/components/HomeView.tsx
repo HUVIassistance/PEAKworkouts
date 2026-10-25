@@ -34,6 +34,13 @@ import {
   localDateString,
   trainingDateString,
 } from '../utils/storage.ts';
+import {
+  makeCycleResolver,
+  computeStreak,
+  isMilestone,
+  nextMilestone,
+  MILESTONE_NOTES,
+} from '../utils/streak.ts';
 
 interface HomeViewProps {
   activeProgram: TrainingProgram;
@@ -99,44 +106,11 @@ export const HomeView: React.FC<HomeViewProps> = ({
   const daysBetween = (a: string, b: string) =>
     Math.round((toDate(b).getTime() - toDate(a).getTime()) / 86400000);
 
-  // Le cycle est ancré sur la DERNIÈRE SÉANCE DE MUSCULATION, pas sur le dernier
-  // jour d'activité : marquer un jour de cardio ne doit pas décaler la rotation
-  // des séances (A -> B -> A), sinon on rejoue toujours la même.
-  const workoutDates = Array.from(new Set(history.map((h) => h.dateString))).sort();
-  const lastWorkout = workoutDates.length ? workoutDates[workoutDates.length - 1] : todayDateStr;
-  const anchorType: 'workout' | 'bouger' = 'workout';
-
-  // Cycle complet : alternance à partir du type de l'ancre, repos en fin de cycle.
-  const cycle: ('workout' | 'bouger' | 'repos')[] = (() => {
-    const out: ('workout' | 'bouger' | 'repos')[] = [];
-    let m = planMuscu;
-    let c = planCardio;
-    let next: 'workout' | 'bouger' = anchorType;
-    while (m > 0 || c > 0) {
-      if (next === 'workout' && m > 0) {
-        out.push('workout');
-        m -= 1;
-        next = 'bouger';
-      } else if (next === 'bouger' && c > 0) {
-        out.push('bouger');
-        c -= 1;
-        next = 'workout';
-      } else if (m > 0) {
-        out.push('workout');
-        m -= 1;
-      } else {
-        out.push('bouger');
-        c -= 1;
-      }
-    }
-    while (out.length < 7) out.push('repos');
-    return out.slice(0, 7);
-  })();
-
-  const cycleTypeFor = (dateStr: string): 'workout' | 'bouger' | 'repos' => {
-    const pos = ((daysBetween(lastWorkout, dateStr) % cycle.length) + cycle.length) % cycle.length;
-    return cycle[pos];
-  };
+  // Cycle partagé avec la page Progression : un seul calcul pour toute l'app.
+  const { cycle, typeFor: cycleTypeFor } = makeCycleResolver(
+    history.map((h) => h.dateString),
+    { muscu: planMuscu, cardio: planCardio, repos: settingsNow.planning?.repos ?? 1 }
+  );
 
   const dayKey = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -230,34 +204,13 @@ export const HomeView: React.FC<HomeViewProps> = ({
     };
   });
 
-  // Streak : jours de SPORT consécutifs.
-  //  - séance de musculation OU jour de sport marqué « fait » (cardio, marche…) -> +1
-  //  - repos PRÉVU ou jour cardio NON fait -> neutre : ni compté, ni cassant
-  //  - séance de MUSCULATION prévue et non faite -> la série s'arrête
-  //  - « rien encore aujourd'hui » ne casse rien : on part d'hier
-  const calculateStreak = (): number => {
-    const active = new Set([...history.map((h) => h.dateString), ...bougerDates]);
-    if (!active.size) return 0;
-    const cursor = new Date(todayDateStr + 'T12:00:00');
-    if (!active.has(todayDateStr)) cursor.setDate(cursor.getDate() - 1);
+  // Série active : calcul PARTAGÉ (utils/streak.ts), identique à la page Progression.
+  const streak = computeStreak(
+    [...history.map((h) => h.dateString), ...bougerDates],
+    todayDateStr,
+    cycleTypeFor
+  );
 
-    let streak = 0;
-    for (let guard = 0; guard < 400; guard += 1) {
-      const ds = localDateString(cursor);
-      const type = cycleTypeFor(ds);
-      if (active.has(ds)) {
-        streak += 1;
-      } else if (type === 'repos' || type === 'bouger') {
-        // neutre : on traverse sans compter (un cardio manqué ne casse pas la série)
-      } else {
-        break; // séance de musculation prévue et non faite
-      }
-      cursor.setDate(cursor.getDate() - 1);
-    }
-    return streak;
-  };
-
-  const streak = calculateStreak();
 
   // Nutrition snapshot
   const totalCalories = nutritionPlan.meals.reduce(
@@ -625,8 +578,17 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <span className="text-xs text-slate-400">jours consécutifs</span>
             </div>
             <span className="text-[11px] text-[#f47b20] font-semibold block">
-              Discipline exemplaire !
+              {isMilestone(streak) ? (
+                <>Palier {streak} jours atteint 🎉</>
+              ) : (
+                <>Prochain palier : {nextMilestone(streak)} jours</>
+              )}
             </span>
+            {isMilestone(streak) && (
+              <span className="text-[10px] text-slate-400 leading-snug block pt-0.5">
+                {MILESTONE_NOTES[streak]}
+              </span>
+            )}
           </div>
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#f47b20] to-[#ff9f4d] flex items-center justify-center text-white shrink-0 shadow-sm">
             <Flame className="w-5 h-5" />

@@ -4,7 +4,8 @@ import {
   PersonalRecord,
   MuscleGroup,
 } from '../types/workout.ts';
-import { localDateString } from '../utils/storage.ts';
+import { localDateString, getSettings, getBougerCompletedDates, trainingDateString } from '../utils/storage.ts';
+import { makeCycleResolver, computeStreak, isMilestone, nextMilestone } from '../utils/streak.ts';
 import {
   TrendingUp,
   Trophy,
@@ -53,32 +54,17 @@ export const ProgressionView: React.FC<ProgressionViewProps> = ({
   ).length;
   const workoutsThisMonth = history.filter((h) => new Date(h.startTime) >= startOfMonth).length;
 
-  // Streak calculation
-  const calculateStreak = (): number => {
-    if (history.length === 0) return 0;
-    const sortedDates = Array.from(new Set(history.map((h) => h.dateString))).sort().reverse();
-    const today = localDateString();
-    const yesterday = localDateString(new Date(Date.now() - 86400000));
-
-    if (sortedDates[0] !== today && sortedDates[0] !== yesterday) {
-      return 0;
-    }
-
-    let streak = 1;
-    for (let i = 0; i < sortedDates.length - 1; i++) {
-      const current = new Date(sortedDates[i]);
-      const prev = new Date(sortedDates[i + 1]);
-      const diffDays = Math.round((current.getTime() - prev.getTime()) / (1000 * 3600 * 24));
-      if (diffDays === 1) {
-        streak++;
-      } else {
-        break;
-      }
-    }
-    return streak;
-  };
-
-  const streak = calculateStreak();
+  // Série active : MÊME calcul que l'accueil (utils/streak.ts).
+  const settings = getSettings();
+  const { typeFor } = makeCycleResolver(
+    history.map((h) => h.dateString),
+    settings.planning || { muscu: 3, cardio: 3, repos: 1 }
+  );
+  const streak = computeStreak(
+    [...history.map((h) => h.dateString), ...getBougerCompletedDates()],
+    trainingDateString(),
+    typeFor
+  );
 
   // Calculate percentage weight increase per exercise
   // Comparison between earliest logged weight and highest/latest weight
@@ -159,6 +145,9 @@ export const ProgressionView: React.FC<ProgressionViewProps> = ({
               <span className="font-mono-numbers text-xl font-bold text-white">{streak}</span>
               <span className="text-[11px] text-slate-400">jours consécutifs</span>
             </div>
+            <span className="text-[10px] font-semibold text-[#f47b20] block pt-0.5">
+              {isMilestone(streak) ? `Palier ${streak} jours 🎉` : `Prochain : ${nextMilestone(streak)} jours`}
+            </span>
           </div>
         </div>
 
