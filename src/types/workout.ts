@@ -79,6 +79,10 @@ export interface RoutineExerciseItem {
   supersetGroup?: string;
   executionMode?: ExerciseExecutionMode;
   notes?: string;
+  /** Date ISO de la dernière modification de la prescription dans Notion.
+   *  Si elle est plus récente que la dernière séance, c'est Notion qui gagne
+   *  au lancement (sinon l'app reprend les charges réellement faites). */
+  prescriptionChangedAt?: string;
 }
 
 export interface WorkoutRoutine {

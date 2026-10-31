@@ -41,6 +41,7 @@ import {
   nextMilestone,
   MILESTONE_NOTES,
 } from '../utils/streak.ts';
+import { MonthCalendar } from './MonthCalendar.tsx';
 
 interface HomeViewProps {
   activeProgram: TrainingProgram;
@@ -65,6 +66,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
 }) => {
   const [bougerDates, setBougerDates] = useState<string[]>([]);
   const [daySheet, setDaySheet] = useState<string | null>(null);
+  const [monthCal, setMonthCal] = useState<Date | null>(null);
 
   useEffect(() => {
     setBougerDates(getBougerCompletedDates());
@@ -497,12 +499,18 @@ export const HomeView: React.FC<HomeViewProps> = ({
       {/* CALENDRIER HEBDOMADAIRE (RYTHME : WORKOUT / BOUGER / REPOS) */}
       <div className="bg-[#111a2e] border border-[#233556] rounded-3xl p-5 shadow-sm space-y-3.5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#233556] pb-2.5">
-          <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setMonthCal(new Date(todayDateStr + 'T12:00:00'))}
+            className="flex items-center gap-2 text-left group"
+            title="Ouvrir le calendrier du mois"
+          >
             <Calendar className="w-4 h-4 text-[#f47b20]" />
-            <h3 className="font-bold text-white text-sm">
+            <h3 className="font-bold text-white text-sm group-hover:text-[#f47b20] transition">
               Rythme hebdomadaire (Séances & Jours « Bouger »)
             </h3>
-          </div>
+            <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
+          </button>
           <span className="text-xs text-slate-400 font-mono">
             3 paires (Workout + Bouger) + 7e jour Repos
           </span>
@@ -725,6 +733,27 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </div>
         );
       })()}
+
+      {monthCal && (
+        <MonthCalendar
+          month={monthCal}
+          todayStr={todayDateStr}
+          onMonthChange={setMonthCal}
+          onClose={() => setMonthCal(null)}
+          onSelectDay={(d) => {
+            setMonthCal(null);
+            setDaySheet(d);
+          }}
+          infoFor={(d) => {
+            const p = planForDate(d);
+            return {
+              type: p.type,
+              done: history.some((h) => h.dateString === d) || bougerDates.includes(d),
+              label: p.subtitle,
+            };
+          }}
+        />
+      )}
     </div>
   );
 };

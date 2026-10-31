@@ -407,6 +407,32 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
     onUpdateExercises(updated);
   };
 
+  /** Corrige une série DÉJÀ VALIDÉE (charge ou reps) sans quitter le repos.
+   *  Aucune propagation : on corrige un fait passé, on ne prépare pas la suite. */
+  const handleEditDoneSet = (
+    exerciseIndex: number,
+    setIndex: number,
+    patch: { weight?: number; reps?: number }
+  ) => {
+    const updated = exercises.map((ex, i) => {
+      if (i !== exerciseIndex) return ex;
+      return {
+        ...ex,
+        sets: ex.sets.map((s, j) => {
+          if (j !== setIndex) return s;
+          const weight =
+            patch.weight === undefined || isNaN(patch.weight)
+              ? s.weight
+              : Math.max(0, Math.round(patch.weight * 10) / 10);
+          const reps =
+            patch.reps === undefined || isNaN(patch.reps) ? s.reps : Math.max(1, Math.round(patch.reps));
+          return { ...s, weight, reps };
+        }),
+      };
+    });
+    onUpdateExercises(updated);
+  };
+
   const handleReplaceExercise = (newExDef: ExerciseDefinition) => {
     const updated = [...exercises];
     const current = updated[currentStep.exerciseIndex];
@@ -636,6 +662,90 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
+
+            {/* Corriger une série déjà validée SANS quitter le repos */}
+            {exercises.some((ex) => ex.sets.some((s) => s.completed)) && (
+              <div className="bg-[#0a0f1d] border border-[#233556] rounded-2xl p-3 text-left space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                    Séries déjà faites — modifiables
+                  </span>
+                  <span className="text-[10px] text-slate-500">kg · reps</span>
+                </div>
+                <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                  {exercises.map((ex, exIdx) => {
+                    const done = ex.sets
+                      .map((s, sIdx) => ({ s, sIdx }))
+                      .filter((x) => x.s.completed);
+                    if (!done.length) return null;
+                    return (
+                      <div key={ex.id} className="space-y-1">
+                        <span className="text-[11px] font-semibold text-slate-200 block truncate">
+                          {ex.name}
+                        </span>
+                        {done.map(({ s, sIdx }) => (
+                          <div key={s.id} className="flex items-center gap-1.5">
+                            <span className="text-[10px] text-slate-500 w-8 shrink-0">S{s.setNumber}</span>
+                            <div className="flex items-center gap-0.5 bg-[#16223b] border border-[#233556] rounded-lg px-1 py-0.5">
+                              <button
+                                type="button"
+                                onClick={() => handleEditDoneSet(exIdx, sIdx, { weight: s.weight - 0.5 })}
+                                className="w-6 h-6 rounded-md bg-[#0f1a2e] text-slate-300 text-sm font-bold active:bg-[#233556]"
+                              >
+                                −
+                              </button>
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                value={s.weight}
+                                onChange={(e) =>
+                                  e.target.value !== '' &&
+                                  handleEditDoneSet(exIdx, sIdx, { weight: parseFloat(e.target.value) })
+                                }
+                                className="w-10 bg-transparent text-center text-xs font-bold text-white focus:outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleEditDoneSet(exIdx, sIdx, { weight: s.weight + 0.5 })}
+                                className="w-6 h-6 rounded-md bg-[#0f1a2e] text-[#f47b20] text-sm font-bold active:bg-[#233556]"
+                              >
+                                +
+                              </button>
+                            </div>
+                            <div className="flex items-center gap-0.5 bg-[#16223b] border border-[#233556] rounded-lg px-1 py-0.5">
+                              <button
+                                type="button"
+                                onClick={() => handleEditDoneSet(exIdx, sIdx, { reps: s.reps - 1 })}
+                                className="w-6 h-6 rounded-md bg-[#0f1a2e] text-slate-300 text-sm font-bold active:bg-[#233556]"
+                              >
+                                −
+                              </button>
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                value={s.reps}
+                                onChange={(e) =>
+                                  e.target.value !== '' &&
+                                  handleEditDoneSet(exIdx, sIdx, { reps: parseInt(e.target.value, 10) })
+                                }
+                                className="w-8 bg-transparent text-center text-xs font-bold text-white focus:outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleEditDoneSet(exIdx, sIdx, { reps: s.reps + 1 })}
+                                className="w-6 h-6 rounded-md bg-[#0f1a2e] text-[#f47b20] text-sm font-bold active:bg-[#233556]"
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           /* PHASE 2: FOCUSED ACTIVE SET CARD (Alternating supersets, 0.5kg increments) */

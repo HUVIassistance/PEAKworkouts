@@ -186,8 +186,14 @@ export default function App() {
 
       // Pré-remplissage : on repart de ce qui a été RÉELLEMENT fait la dernière
       // fois (charge + reps par série). La cible (`targetReps`) reste celle du
-      // programme : elle n'est mise à jour que via le bouton « mettre à jour Notion ».
-      const prevSets = getLastPerformanceForExercise(exName, item.exerciseId);
+      // programme, mise à jour seulement via le bouton « mettre à jour Notion ».
+      // EXCEPTION : si la prescription a été modifiée dans Notion APRÈS la
+      // dernière séance, c'est Notion qui gagne (Hugo vient d'y toucher).
+      const prevPerf = getLastPerformanceForExercise(exName, item.exerciseId);
+      const notionChangedAfter =
+        !!item.prescriptionChangedAt &&
+        new Date(item.prescriptionChangedAt).getTime() > prevPerf.endedAt;
+      const prevSets = notionChangedAfter ? [] : prevPerf.sets;
       const lastWeight = getLastWeightForExercise(exName, item.exerciseId);
       const initialWeight =
         lastWeight !== null && lastWeight !== undefined

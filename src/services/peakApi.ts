@@ -15,6 +15,7 @@ import {
   saveSettings,
   setActiveProgramId,
   removeDemoRoutines,
+  getRoutines,
 } from '../utils/storage.ts';
 
 /**
@@ -194,17 +195,35 @@ export async function syncProgram(): Promise<SyncSummary> {
     const routineId = 'notion-' + w.notionId;
     workoutIds.push(routineId);
 
+    // Prescription précédente : sert à détecter ce que Hugo a MODIFIÉ dans
+    // Notion, pour que ces changements gagnent sur les charges mémorisées.
+    const previous = getRoutines().find((r) => r.id === routineId);
+
     const items: RoutineExerciseItem[] = w.exercises.map((ex) => {
       const def = findOrCreateExercise(ex.name, created);
       usedExerciseIds.push(def.id);
       exerciseCount += 1;
       if (!ex.hasWeight) warnings.push(ex.name + ' : aucune charge dans Notion (0 kg)');
+
+      const nextWeight = ex.weightKg ?? 0;
+      const nextWeights = ex.weights && ex.weights.length ? ex.weights : undefined;
+      const prev = previous?.exercises.find((p) => p.exerciseId === def.id);
+      const changed =
+        !!prev &&
+        (prev.sets !== (ex.sets || 3) ||
+          prev.reps !== (ex.reps || 10) ||
+          prev.weight !== nextWeight ||
+          JSON.stringify(prev.weights || []) !== JSON.stringify(nextWeights || []));
+
       return {
         exerciseId: def.id,
           sets: ex.sets || 3,
           reps: ex.reps || 10,
-          weight: ex.weightKg ?? 0,
-          weights: ex.weights && ex.weights.length ? ex.weights : undefined,
+          weight: nextWeight,
+          weights: nextWeights,
+          prescriptionChangedAt: changed
+            ? new Date().toISOString()
+            : prev?.prescriptionChangedAt,
           // Un repos de superset est plus long : la charge y est plus élevée.
           restSeconds: ex.superset ? 120 : 90,
         supersetGroup: ex.superset || undefined,

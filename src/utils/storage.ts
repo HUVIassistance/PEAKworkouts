@@ -369,10 +369,14 @@ export interface PreviousSetPerformance {
   reps: number;
 }
 
+export interface PreviousPerformance {
+  sets: PreviousSetPerformance[];
+  endedAt: number;
+}
+
 /** Ce qui a été RÉELLEMENT fait à la dernière séance pour cet exercice
- *  (charge et reps de chaque série validée). Sert à pré-remplir la prochaine
- *  séance : l'app « retient » ce que tu as soulevé, sans toucher à la cible. */
-export function getLastPerformanceForExercise(exerciseName: string, exerciseId?: string): PreviousSetPerformance[] {
+ *  (charge et reps de chaque série validée) + quand la séance s'est terminée. */
+export function getLastPerformanceForExercise(exerciseName: string, exerciseId?: string): PreviousPerformance {
   const history = getWorkoutHistory();
   const searchName = (exerciseName || '').toLowerCase().trim();
   for (const session of history) {
@@ -383,11 +387,14 @@ export function getLastPerformanceForExercise(exerciseName: string, exerciseId?:
     if (foundEx) {
       const done = (foundEx.sets || []).filter((s) => s.completed);
       if (done.length) {
-        return done.map((s) => ({ weight: Number(s.weight) || 0, reps: Number(s.reps) || 0 }));
+        return {
+          sets: done.map((s) => ({ weight: Number(s.weight) || 0, reps: Number(s.reps) || 0 })),
+          endedAt: Number(session.endTime) || 0,
+        };
       }
     }
   }
-  return [];
+  return { sets: [], endedAt: 0 };
 }
 
 export function getPersonalRecords(): Record<string, PersonalRecord> {
