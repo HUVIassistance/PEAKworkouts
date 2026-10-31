@@ -109,6 +109,9 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
 
   // Rest countdown mode
   const [isRestMode, setIsRestMode] = useState(false);
+  // Le chrono continue de tourner, mais l'écran de repos est masqué pour
+  // laisser éditer une série (retour possible via la pastille flottante).
+  const [restHidden, setRestHidden] = useState(false);
   const [restSecondsLeft, setRestSecondsLeft] = useState(0);
   const [restTotalDuration, setRestTotalDuration] = useState(0);
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -246,11 +249,15 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
   useEffect(() => {
     if (!isRestMode) return;
     if (restSecondsLeft <= 0) {
-      // Le repos est fini : on passe VRAIMENT à l'étape suivante.
-      // (Avant, on restait bloqué sur la série précédente.)
+      // Le repos est fini : on passe VRAIMENT à l'étape suivante…
       soundEngine.playRestComplete();
       setIsRestMode(false);
-      advanceToNextStep();
+      if (restHidden) {
+        // …sauf si Hugo était en train d'éditer une série : on ne le déplace pas.
+        setRestHidden(false);
+      } else {
+        advanceToNextStep();
+      }
       return;
     }
     const timer = setTimeout(() => {
@@ -260,7 +267,7 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
       setRestSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
     return () => clearTimeout(timer);
-  }, [isRestMode, restSecondsLeft]);
+  }, [isRestMode, restSecondsLeft, restHidden]);
 
   // Advance to next step in the schedule
   const advanceToNextStep = () => {
@@ -304,8 +311,13 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
   const propagateWeightToUpcomingSets = (newWeight: number) => {
     const updated = [...exercises];
     const targetEx = updated[currentStep.exerciseIndex];
+    const currentIsCompleted = !!targetEx.sets[currentStep.setIndex]?.completed;
     targetEx.sets.forEach((s, idx) => {
-      if (idx >= currentStep.setIndex && !s.completed) {
+      if (idx === currentStep.setIndex && currentIsCompleted) {
+        // Série déjà validée : on CORRIGE cette série, sans toucher aux autres.
+        s.weight = newWeight;
+      } else if (idx > currentStep.setIndex && !s.completed) {
+        // Série à venir : on prépare la suite, comme avant.
         s.weight = newWeight;
       }
     });
@@ -335,6 +347,7 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
       setRestTotalDuration(duration);
       setRestSecondsLeft(duration);
       setIsRestMode(true);
+      setRestHidden(false);
     } else {
       advanceToNextStep();
     }
@@ -568,8 +581,21 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
 
       {/* Main Focus Area */}
       <main className="max-w-xl w-full mx-auto px-4 py-4 flex-1 flex flex-col justify-center">
+        {/* Chrono de repos toujours visible, même en train d'éditer une série */}
+        {isRestMode && restHidden && (
+          <button
+            type="button"
+            onClick={() => setRestHidden(false)}
+            className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#f47b20] text-white shadow-xl shadow-[#f47b20]/30"
+          >
+            <Flame className="w-4 h-4" />
+            <span className="font-mono-numbers font-black text-base">{formatTime(restSecondsLeft)}</span>
+            <span className="text-[11px] font-semibold opacity-90">retour au repos</span>
+          </button>
+        )}
+
         {/* PHASE 1: REST COUNTDOWN MODE */}
-        {isRestMode ? (
+        {isRestMode && !restHidden ? (
           <div className="bg-[#111a2e] border-2 border-[#f47b20] rounded-3xl p-6 shadow-2xl text-center space-y-6 animate-in fade-in zoom-in-95 duration-200">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#f47b20]/20 border border-[#f47b20]/40 text-[#f47b20] text-xs font-bold uppercase tracking-wider">
               <Flame className="w-4 h-4" />
@@ -975,9 +1001,9 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
                   <div
                     key={st.stepId}
                     onClick={() => {
-                      // Sortir du repos : cliquer une série depuis la liste doit
-                      // mener à l'écran d'édition, comme hors des temps de repos.
-                      setIsRestMode(false);
+                      // Le chrono de repos NE s'arrête PAS : on masque juste
+                      // l'écran de repos le temps d'éditer la série.
+                      if (isRestMode) setRestHidden(true);
                       setCurrentStepIndex(stIdx);
                       setShowOverview(false);
                     }}
