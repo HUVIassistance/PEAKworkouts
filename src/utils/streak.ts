@@ -22,7 +22,11 @@ export const daysBetween = (a: string, b: string): number =>
 export const dayKey = (d: Date): string =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-/** Motif du cycle : alternance muscu / cardio, repos en fin de cycle. */
+/** Motif du cycle : alternance muscu / cardio, puis les jours de repos demandés.
+ *  On NE complète PLUS jusqu'à 7 : ce padding insérait un repos toutes les 6
+ *  cases et décalait la parité. Hugo s'entraîne tous les 2 jours — avec un
+ *  cycle de 7 cases, un jour de musculation « prévu » tombait sur un jour sans
+ *  séance, ce qui cassait la série artificiellement. */
 export function buildTrainingCycle(planning: Planning): DayType[] {
   const out: DayType[] = [];
   let m = Math.max(0, planning.muscu ?? 3);
@@ -46,8 +50,8 @@ export function buildTrainingCycle(planning: Planning): DayType[] {
       c -= 1;
     }
   }
-  while (out.length < 7) out.push('repos');
-  return out.slice(0, 7);
+  for (let r = 0; r < Math.max(0, planning.repos ?? 0); r += 1) out.push('repos');
+  return out.length ? out : ['workout'];
 }
 
 /** Résolveur de type de jour, ancré sur la dernière séance de MUSCULATION. */
