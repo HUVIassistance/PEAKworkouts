@@ -224,12 +224,19 @@ export function localDateString(date?: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-/** Jour d'entraînement : la journée bascule à 6 h du matin.
- *  Hugo lance ses séances entre 01 h et 05 h et ne dort qu'après : à 05 h 09,
- *  c'est encore la veille. Historique observé : 22 h 35 → 05 h 09.
- *  La date est de toute façon figée au LANCEMENT, donc une séance commencée
- *  à 23 h 45 et finie à 00 h 41 reste sur sa journée de départ. */
-export const TRAINING_DAY_ROLLOVER_MINUTES = 360; // 6 h 00
+/** Jour d'entraînement : la journée bascule à 3 h 30 du matin.
+ *  Hugo lance ses séances entre 01 h et 03 h et ne dort qu'après. La date est de
+ *  toute façon figée au LANCEMENT, donc une séance commencée à 23 h 45 et finie
+ *  à 00 h 41 reste sur sa journée de départ. */
+export const TRAINING_DAY_ROLLOVER_MINUTES = 210; // 3 h 30
+
+/** Séances régularisées à la main : leur date ne doit JAMAIS être recalculée,
+ *  sinon un changement de bascule les fait basculer d'un jour. */
+export const PINNED_SESSION_DATES: Record<string, string> = {
+  // Séance A lancée le 2 nov à 05 h 09 (après l'ancienne bascule) : Hugo
+  // considère qu'elle appartient au 1er novembre.
+  'log-1793614160417': '2026-11-01',
+};
 
 export function trainingDateString(date?: Date): string {
   const d = date ? new Date(date.getTime()) : new Date();
@@ -266,6 +273,15 @@ export function getWorkoutHistory(): WorkoutSessionLog[] {
       })
       .map((l: WorkoutSessionLog) => {
         if (!l?.endTime) return l;
+        // Date épinglée : on n'y touche jamais (régularisation manuelle).
+        const pinned = PINNED_SESSION_DATES[l.id];
+        if (pinned) {
+          if (l.dateString !== pinned) {
+            dirty = true;
+            return { ...l, dateString: pinned };
+          }
+          return l;
+        }
         const end = new Date(l.endTime);
         // Migration 3 : la séance appartient au jour où elle a été LANCÉE.
         // Une séance 23 h 45 -> 00 h 41 ne doit pas basculer sur le lendemain.
