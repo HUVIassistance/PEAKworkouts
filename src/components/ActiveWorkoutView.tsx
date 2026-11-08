@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   ActiveExerciseItem,
   WorkoutSet,
@@ -113,6 +113,9 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
   // laisser éditer une série (retour possible via la pastille flottante).
   const [restHidden, setRestHidden] = useState(false);
   const [restSecondsLeft, setRestSecondsLeft] = useState(0);
+  // Échéance absolue du repos : la source de vérité, pour survivre à une mise
+  // en arrière-plan de l'app (les timers y sont suspendus).
+  const restEndsAtRef = useRef<number>(0);
   const [restTotalDuration, setRestTotalDuration] = useState(0);
   const [soundEnabled, setSoundEnabled] = useState(true);
 
@@ -234,40 +237,64 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
   const currentExercise = exercises[currentStep?.exerciseIndex ?? 0] || exercises[0];
   const activeSet = currentExercise?.sets[currentStep?.setIndex ?? 0] || currentExercise?.sets[0];
 
-  // Global elapsed timer interval
+  // Global elapsed timer interval — ancré sur l'horloge murale : en arrière-plan
+  // le navigateur suspend les timers, mais au retour on rattrape le temps réel.
+  const lastTickRef = useRef<number>(Date.now());
   useEffect(() => {
-    let interval: any = null;
-    if (isElapsedRunning) {
-      interval = setInterval(() => {
-        setElapsedSeconds((prev) => prev + 1);
-      }, 1000);
-    }
-    return () => clearInterval(interval);
+    if (!isElapsedRunning) return;
+    lastTickRef.current = Date.now();
+    const id = setInterval(() => {
+      const now = Date.now();
+      const delta = Math.floor((now - lastTickRef.current) / 1000);
+      if (delta > 0) {
+        lastTickRef.current += delta * 1000;
+        setElapsedSeconds((prev) => prev + delta);
+      }
+    }, 1000);
+    return () => clearInterval(id);
   }, [isElapsedRunning]);
 
-  // Rest timer countdown
+  // Rest timer countdown — même principe : on calcule le restant depuis une
+  // échéance absolue (restEndsAtRef), jamais en décrémentant un compteur.
+  const lastBeepRef = useRef<number>(-1);
   useEffect(() => {
     if (!isRestMode) return;
-    if (restSecondsLeft <= 0) {
-      // Le repos est fini : on passe VRAIMENT à l'étape suivante…
+
+    const computeLeft = () => Math.max(0, Math.ceil((restEndsAtRef.current - Date.now()) / 1000));
+
+    const tick = () => {
+      const left = computeLeft();
+      setRestSecondsLeft(left);
+      if (left > 0 && left <= 11 && left !== lastBeepRef.current) {
+        lastBeepRef.current = left;
+        soundEngine.playTick(left <= 6 ? 880 : 700);
+      }
+      return left;
+    };
+
+    tick();
+    const id = setInterval(() => {
+      if (tick() > 0) return;
+      clearInterval(id);
       soundEngine.playRestComplete();
       setIsRestMode(false);
       if (restHidden) {
-        // …sauf si Hugo était en train d'éditer une série : on ne le déplace pas.
         setRestHidden(false);
       } else {
         advanceToNextStep();
       }
-      return;
-    }
-    const timer = setTimeout(() => {
-      if (restSecondsLeft <= 11) {
-        soundEngine.playTick(restSecondsLeft <= 6 ? 880 : 700);
-      }
-      setRestSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
-    return () => clearTimeout(timer);
-  }, [isRestMode, restSecondsLeft, restHidden]);
+
+    // Au retour au premier plan, on recalcule tout de suite (pas d'attente d'1 s).
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') tick();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [isRestMode, restHidden]);
 
   // Advance to next step in the schedule
   const advanceToNextStep = () => {
@@ -345,6 +372,8 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
     if (autoStartRest) {
       const duration = currentStep.recommendedRestSeconds || 60;
       setRestTotalDuration(duration);
+      restEndsAtRef.current = Date.now() + duration * 1000;
+      lastBeepRef.current = -1;
       setRestSecondsLeft(duration);
       setIsRestMode(true);
       setRestHidden(false);
@@ -641,14 +670,20 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
             <div className="flex items-center justify-center gap-2 pt-1">
               <button
                 type="button"
-                onClick={() => setRestSecondsLeft((prev) => prev + 15)}
+                onClick={() => {
+                  restEndsAtRef.current += 15000;
+                  setRestSecondsLeft((prev) => prev + 15);
+                }}
                 className="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-[#16223b] hover:bg-[#233556] text-slate-300 border border-[#233556] transition"
               >
                 +15s
               </button>
               <button
                 type="button"
-                onClick={() => setRestSecondsLeft((prev) => prev + 30)}
+                onClick={() => {
+                  restEndsAtRef.current += 30000;
+                  setRestSecondsLeft((prev) => prev + 30);
+                }}
                 className="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-[#16223b] hover:bg-[#233556] text-slate-300 border border-[#233556] transition"
               >
                 +30s

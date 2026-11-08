@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   WorkoutRoutine,
   WorkoutSessionLog,
@@ -75,6 +75,9 @@ export default function App() {
   // Jour auquel la séance est rattachée : figé au LANCEMENT (pas à la fin),
   // pour qu'une séance finie après minuit reste sur la journée d'origine.
   const [activeSessionDate, setActiveSessionDate] = useState<string>('');
+  // Garde-fou d'hydratation : empêche l'effet de sauvegarde d'écrire `null`
+  // avant que la séance en cours n'ait été relue depuis localStorage.
+  const hydratedRef = useRef(false);
 
   // Modals
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
@@ -142,10 +145,15 @@ export default function App() {
 
     const settings = getSettings();
     soundEngine.enabled = settings.soundEnabled;
+    hydratedRef.current = true;
   }, []);
 
   // Save active workout progress to localStorage
   useEffect(() => {
+    // On n'écrit RIEN avant la restauration : au premier rendu, activeExercises
+    // est encore vide et l'écriture d'un `null` effaçait la séance en cours
+    // (d'où les séances qui repartaient de zéro après une fermeture de l'app).
+    if (!hydratedRef.current) return;
     if (activeExercises.length > 0) {
       saveActiveWorkoutState({
         routineName: activeRoutineName,
