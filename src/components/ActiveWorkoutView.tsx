@@ -7,6 +7,13 @@ import {
   ExerciseIconKey,
   MuscleGroup,
 } from '../types/workout.ts';
+import {
+  notificationPermission,
+  requestNotificationPermission,
+  scheduleRestAlerts,
+  cancelRestAlerts,
+  type NotifPermission,
+} from '../services/notifications.ts';
 import { ExerciseVisual } from './ExerciseVisual.tsx';
 import { soundEngine } from '../utils/audio.ts';
 
@@ -44,6 +51,8 @@ import {
   Play,
   Pause,
   Volume2,
+  Bell,
+  BellRing,
   VolumeX,
   Plus,
   Minus,
@@ -118,6 +127,7 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
   const restEndsAtRef = useRef<number>(0);
   const [restTotalDuration, setRestTotalDuration] = useState(0);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [notifPerm, setNotifPerm] = useState<NotifPermission>(notificationPermission());
 
   // Modals
   const [showOverview, setShowOverview] = useState(false);
@@ -298,6 +308,7 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
 
   // Advance to next step in the schedule
   const advanceToNextStep = () => {
+    cancelRestAlerts();
     setIsRestMode(false);
     if (currentStepIndex < steps.length - 1) {
       setCurrentStepIndex(currentStepIndex + 1);
@@ -377,6 +388,7 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
       setRestSecondsLeft(duration);
       setIsRestMode(true);
       setRestHidden(false);
+      scheduleRestAlerts(restEndsAtRef.current);
     } else {
       advanceToNextStep();
     }
@@ -570,6 +582,32 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
                 )}
               </button>
 
+              {/* Alertes de repos (fonctionnent même sur une autre app) */}
+              <button
+                type="button"
+                onClick={async () => {
+                  const ok = await requestNotificationPermission();
+                  setNotifPerm(ok ? 'granted' : notificationPermission());
+                  if (ok && restEndsAtRef.current > Date.now()) {
+                    scheduleRestAlerts(restEndsAtRef.current);
+                  }
+                }}
+                className="p-2 rounded-xl bg-[#16223b] hover:bg-[#233556] text-slate-300 hover:text-white transition border border-[#233556]"
+                title={
+                  notifPerm === 'granted'
+                    ? 'Alertes de repos activées (10 s avant la fin)'
+                    : notifPerm === 'denied'
+                    ? 'Notifications bloquées — autorise-les dans Chrome'
+                    : 'Activer les alertes de repos'
+                }
+              >
+                {notifPerm === 'granted' ? (
+                  <BellRing className="w-4 h-4 text-[#f47b20]" />
+                ) : (
+                  <Bell className="w-4 h-4" />
+                )}
+              </button>
+
               {/* La croix est redondante : la flèche de retour gère l'annulation. */}
 
               <button
@@ -673,6 +711,7 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
                 onClick={() => {
                   restEndsAtRef.current += 15000;
                   setRestSecondsLeft((prev) => prev + 15);
+                  scheduleRestAlerts(restEndsAtRef.current);
                 }}
                 className="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-[#16223b] hover:bg-[#233556] text-slate-300 border border-[#233556] transition"
               >
@@ -683,6 +722,7 @@ export const ActiveWorkoutView: React.FC<ActiveWorkoutViewProps> = ({
                 onClick={() => {
                   restEndsAtRef.current += 30000;
                   setRestSecondsLeft((prev) => prev + 30);
+                  scheduleRestAlerts(restEndsAtRef.current);
                 }}
                 className="px-3.5 py-2.5 rounded-xl text-xs font-bold bg-[#16223b] hover:bg-[#233556] text-slate-300 border border-[#233556] transition"
               >
